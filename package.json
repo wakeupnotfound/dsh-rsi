@@ -1,0 +1,35 @@
+{
+  "name": "dsh-rsi",
+  "version": "0.1.0",
+  "description": "Recursive Self-Improvement (RSI) plugin and runtime engine for DeepSeek Harness (DSH)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "bin": {
+    "rsi": "./bin/rsi.mjs"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./core": "./lib/core/index.js",
+    "./tools": "./lib/tools/definitions.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "status": "node bin/rsi.mjs status"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "rsi",
+    "recursive-self-improvement",
+    "epistemic-core",
+    "independent-verifier",
+    "memory-distillation"
+  ],
+  "author": "Antigravity Team",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
