@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "RSIAgent 独立双盲验证器",
+    "description": "基于 Epistemic 准则对候选交付物执行独立只读探针，防范 Agent 自欺与假阳性 (False-Done)"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Double-Blind Verifier",
+    "description": "Independent zero-history inspection using read-only probes and strict doubt falsification."
+  }
+}

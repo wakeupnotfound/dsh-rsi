@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-rsi",
+    "description": "基于 RSIAgent 递归自我改进引擎：独立双盲验证、因果经验提炼与跨会话可演化记忆"
+  }
+}

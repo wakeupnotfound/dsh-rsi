@@ -34,8 +34,9 @@
   "contributes": {
     "x-display": [
       {
-        "title": "RSIAgent for DSH",
-        "description": "Training-free recursive self-improvement engine: independent double-blind verification, causal memory distillation, and cross-session knowledge consolidation for DeepSeek Harness.",
+        "icon": "./icon.png",
+        "title": "dsh-rsi",
+        "description": "基于 RSIAgent 递归自我改进引擎：独立双盲验证、因果经验提炼与跨会话可演化记忆",
         "locales": [
           "locale/en.json",
           "locale/zh.json"
@@ -70,8 +71,22 @@
     ],
     "x-components": [
       {
-        "id": "dsh-rsi-core",
-        "entry": "dsh-rsi",
+        "id": "dsh-rsi-verifier",
+        "entry": "dsh-rsi/verifier",
+        "defaultEnabled": true,
+        "platforms": ["win32", "linux", "darwin"],
+        "targets": ["win32-x64", "linux-x64", "darwin-arm64"]
+      },
+      {
+        "id": "dsh-rsi-memory",
+        "entry": "dsh-rsi/memory",
+        "defaultEnabled": true,
+        "platforms": ["win32", "linux", "darwin"],
+        "targets": ["win32-x64", "linux-x64", "darwin-arm64"]
+      },
+      {
+        "id": "dsh-rsi-epistemic",
+        "entry": "dsh-rsi/epistemic",
         "defaultEnabled": true,
         "platforms": ["win32", "linux", "darwin"],
         "targets": ["win32-x64", "linux-x64", "darwin-arm64"]

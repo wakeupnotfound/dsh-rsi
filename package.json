@@ -1,17 +1,41 @@
 {
   "name": "dsh-rsi",
   "version": "0.1.0",
-  "description": "Recursive Self-Improvement (RSI) plugin and runtime engine for DeepSeek Harness (DSH)",
+  "description": "基于 RSIAgent 递归自我改进引擎：独立双盲验证、因果经验提炼与跨会话可演化记忆",
+  "icon": "./icon.png",
   "type": "module",
   "main": "./lib/index.js",
   "bin": {
     "rsi": "./bin/rsi.mjs"
   },
   "exports": {
-    ".": "./lib/index.js",
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./verifier": {
+      "default": "./lib/components/verifier/index.js"
+    },
+    "./verifier/package.json": "./lib/components/verifier/package.json",
+    "./verifier/locale/*.json": "./lib/components/verifier/locale/*.json",
+    "./memory": {
+      "default": "./lib/components/memory/index.js"
+    },
+    "./memory/package.json": "./lib/components/memory/package.json",
+    "./memory/locale/*.json": "./lib/components/memory/locale/*.json",
+    "./epistemic": {
+      "default": "./lib/components/epistemic/index.js"
+    },
+    "./epistemic/package.json": "./lib/components/epistemic/package.json",
+    "./epistemic/locale/*.json": "./lib/components/epistemic/locale/*.json",
     "./core": "./lib/core/index.js",
-    "./tools": "./lib/tools/definitions.js",
-    "./package.json": "./package.json"
+    "./tools": "./lib/tools/definitions.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",

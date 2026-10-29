@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Evolvable Memory Bank",
+    "description": "Persistent cross-task memory with causal distillation and cross-corpus conflict reconciliation."
+  }
+}

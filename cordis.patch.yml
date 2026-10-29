@@ -1,0 +1,15 @@
+- insert:
+    - id: dsh-rsi-verifier
+      name: dsh-rsi/verifier
+      config:
+        probeTimeoutMs: 30000
+        maxProbes: 10
+    - id: dsh-rsi-memory
+      name: dsh-rsi/memory
+      config:
+        enabled: true
+    - id: dsh-rsi-epistemic
+      name: dsh-rsi/epistemic
+      config:
+        epistemicPromptOrder: 3100
+        memoryPromptOrder: 3110

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-rsi",
+    "description": "Training-free recursive self-improvement engine based on RSIAgent: double-blind verifier, causal distillation, and evolvable memory."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "dsh-rsi-epistemic",
+  "description": "向系统提示词注入 E1-E6 认识论准则：以真实环境探针为准，严禁臆测，错误即证据。",
+  "icon": "./icon.png",
+  "type": "module"
+}
