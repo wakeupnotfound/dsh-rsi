@@ -64,40 +64,120 @@ dsh-rsi (v0.1.0)
 
 ## 🔄 核心工作流：递归自进化闭环
 
-```text
-                     ┌──────────────────────────────────┐
-                     │          Task Objective          │
-                     └────────────────┬─────────────────┘
-                                      │
-                                      ▼
-                      ┌────────────────────────────────┐
- ┌── System Prompt ──►│   Actor Agent (执行者)         │
- │   注入 E1-E6 准则  │   - 挂载 ~/.memory 经验清单    │
- │   与记忆库清单      │   - 采用 Code-as-Policy 编写代码│
- │                    └───────────────┬────────────────┘
- │                                    │ 交付物已就绪
- │                                    ▼
- │                    ┌────────────────────────────────┐
- │                    │ Double-Blind Verifier (独立法官)│
- │                    │ - 零历史上下文 (Zero-History)  │
- │                    │ - 只读物理探针 (Read-only)     │
- │                    │ - 疑点一票否决 (Doubt Invariant)│
- │                    └───────────────┬────────────────┘
- │                                    │ 裁决结果 (PASS / FAIL + 证据)
- │                                    ▼
- │                    ┌────────────────────────────────┐
- │                    │ Memory Distillation (经验提炼) │
- │                    │ - 抽取因果机理与避坑关键点      │
- │                    └───────────────┬────────────────┘
- │                                    │ 新因果条目
- │                                    ▼
- │                    ┌────────────────────────────────┐
- │                    │ Memory Reconciliation (对齐消歧)│
- │                    │ - 排查语料库冲突               │
- │                    │ - 标注 Superseded 废弃旧假设   │
- │                    └───────────────┬────────────────┘
- │                                    │
- └────────────────────────────────────┴── 写入可演化持久记忆库
+<p align="center">
+  <img src="docs/assets/architecture-overview.png" alt="RSIAgent for DSH 架构与协同闭环" width="100%">
+</p>
+
+整个自我进化生命周期遵循以下 5 步状态流转：
+1. **任务启动**：注入 E1-E6 认识论法则，挂载当前持久记忆库清单，Actor 使用 Code-as-Policy 编写和执行代码；
+2. **双盲验收**：产物完成后自动由 Verifier 开启无历史独立 Subagent，运行只读探针探测物理环境，执行疑点一票否决；
+3. **因果经验提炼**：Actor 复盘整条轨迹与审计反馈，抽取因果机理与避坑关键点；
+4. **冲突排查对齐**：Reconciler 遍历记忆库，利用 Jaccard 相似度与极性检测，自动为旧冲突规则打上 `SUPERSEDED` 标记；
+5. **经验沉淀进阶**：计算新记忆库的 Tree SHA-256 哈希并持久化，供后续所有任务无缝继承。
+
+---
+
+## 🚀 部署方式详解（Deployment Methods）
+
+<p align="center">
+  <img src="docs/assets/deployment-workflow.png" alt="DSH 插件部署、图标管理与卸载全流程指南" width="100%">
+</p>
+
+### 方式一：开发调试部署（推荐，实时生效）
+
+**适用场景**：日常开发、功能调试、随改随测。
+
+1. **建立源码软链接**：
+   ```bash
+   ln -s "/Users/juheng/Documents/AgentProjects/dsh-rsi" ~/.dsh/profiles/desktop/node_modules/dsh-rsi
+   ```
+2. **在桌面 Profile 中注册**：
+   在 `~/.dsh/profiles/desktop/package.json` 中配置：
+   ```json
+   {
+     "name": "dsh-profile-desktop",
+     "private": true,
+     "dsh": {
+       "profile": {
+         "bundles": [
+           "@deepseek-ai/dsh-base",
+           "@deepseek-ai/dsh-web-app",
+           "dsh-ops",
+           "dsh-rsi"
+         ]
+       }
+     },
+     "dependencies": {
+       "dsh-ops": "file:/Users/juheng/.dsh/plugin-packages/dsh-ops-0.3.1.tgz",
+       "dsh-rsi": "file:/Users/juheng/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz"
+     }
+   }
+   ```
+3. **重启 DeepSeek Harness**：完全退出并重新打开应用。
+   > **优势**：修改 `lib/` 源码无需重新打包，刷新或重启即可实时加载最新代码。
+
+---
+
+### 方式二：标准离线打包与分发部署
+
+**适用场景**：稳定版交付、跨机器部署或分发归档。
+
+1. **打包归档为 `.tgz`**：
+   ```bash
+   rm -rf /tmp/dsh-rsi-pkg && mkdir -p /tmp/dsh-rsi-pkg/package
+   cp -R /Users/juheng/Documents/AgentProjects/dsh-rsi/* /tmp/dsh-rsi-pkg/package/
+   tar -czf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz -C /tmp/dsh-rsi-pkg package
+   ```
+2. **确认文件归档路径**：
+   `~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz`
+3. **在 DSH 桌面 Profile 中关联该归档**（如方式一中的 `dependencies` 字段所示）。
+4. **重启 DSH**，详情页来源信息将清晰标明为 `file:.../dsh-rsi-0.1.0.tgz`。
+
+---
+
+## 🎨 图标管理：删除、恢复默认与个性化更换
+
+### 场景 A：删除自定义图标（恢复 DSH 系统默认图标）
+如果你希望恢复为 DSH 系统原生的蓝色网格/几何方块默认图标：
+1. **删除项目中的 `icon.png`**：
+   ```bash
+   rm /Users/juheng/Documents/AgentProjects/dsh-rsi/icon.png
+   ```
+2. **移除配置声明**：
+   编辑 `package.json` 和 `dsh-plugin.json`，删去 `"icon": "./icon.png"` 这一行。
+3. **重新打包并重启 DSH**：
+   DSH 的 `readPluginMeta` 检测不到图标时，将自动优雅回退至内建的 `DefaultArtwork`。
+
+### 场景 B：更换为自定义图标（如动漫头像或企业 Logo）
+1. 准备一张 256×256 分辨率的 PNG 格式图片；
+2. 覆盖到项目根目录：
+   ```bash
+   cp your-avatar.png /Users/juheng/Documents/AgentProjects/dsh-rsi/icon.png
+   ```
+3. 重新打包更新 `~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz`，重启 DSH 即可呈现新图标。
+
+---
+
+## 🗑️ 插件卸载与数据清理
+
+### 方式一：DSH 图形界面一键卸载（UI 按钮）
+在 DSH 的「**设置**」→「**插件**」→「**dsh-rsi**」详情页右上角，点击红色的 **`[🗑 卸载]`** 按钮：
+- DSH 会自动调用内置的 `removeBundle` 机制；
+- 自动将 `dsh-rsi` 从 `package.json` 的 `dsh.profile.bundles` 中注销并停止服务。
+
+### 方式二：手动彻底清理
+如需在磁盘上完全清除所有相关安装项：
+```bash
+# 1. 移除软链接
+rm ~/.dsh/profiles/desktop/node_modules/dsh-rsi
+
+# 2. 移除压缩安装包
+rm ~/.dsh/plugin-packages/dsh-rsi-*.tgz
+
+# 3. 从 ~/.dsh/profiles/desktop/package.json 移除 "dsh-rsi" 项
+
+# 4. 可选：清空历史积累的持久记忆库数据
+rm -rf ~/.dsh/storages/rsi
 ```
 
 ---
@@ -173,7 +253,7 @@ ok 8 - VerifierRuntime probe safety checks
 ok 9 - VerifierRuntime runProbe execution
 ok 10 - VerifierRuntime parseReport handling and doubt enforcement
 1..10
-# tests 10 | pass 10 | fail 0 | duration 53ms
+# tests 10 | pass 10 | fail 0 | duration 51ms
 ```
 
 ---
@@ -201,7 +281,10 @@ dsh-rsi/
 ├── locale/                      # 根包多语言翻译 (zh.json, en.json)
 ├── tests/                       # 单元测试套件
 ├── docs/
-│   └── ARCHITECTURE.md          # 详细架构映射与技术设计文档
+│   ├── ARCHITECTURE.md          # 详细架构映射与技术设计文档
+│   └── assets/                  # 高清架构配图与部署流程图
+│       ├── architecture-overview.png
+│       └── deployment-workflow.png
 ├── cordis.patch.yml             # Cordis 组件装配清单
 ├── dsh-plugin.json              # DSH 规范 Manifest 清单 (v0.15)
 ├── package.json                 # Node ESM 规范配置
@@ -211,39 +294,11 @@ dsh-rsi/
 
 ---
 
-## 🔌 在 DeepSeek Harness 中集成
-
-在 DSH 的桌面 Profile 配置目录（`~/.dsh/profiles/desktop/package.json`）中声明该 Bundle 即可：
-
-```json
-{
-  "name": "dsh-profile-desktop",
-  "private": true,
-  "dsh": {
-    "profile": {
-      "bundles": [
-        "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
-        "dsh-ops",
-        "dsh-rsi"
-      ]
-    }
-  },
-  "dependencies": {
-    "dsh-ops": "file:/Users/juheng/.dsh/plugin-packages/dsh-ops-0.3.1.tgz",
-    "dsh-rsi": "file:/Users/juheng/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz"
-  }
-}
-```
-
-重新启动 **DeepSeek Harness** 应用即可在「插件」管理界面中查阅和管理 `dsh-rsi`。
-
----
-
 ## 🗺️ 后续演进计划 (Roadmap)
 
 - [x] **MVP 阶段**：E1-E6 Epistemic Core 注入、独立双盲 Verifier 探针验收、双作用域 Memory Bank、因果经验提炼与跨语料 Reconciliation。
 - [x] **DSH 组件化规范适配**：独立子组件包结构、专属 256px 图标、多语言本地化配置。
+- [x] **全流程部署指南与高清架构图**：开发软链接、离线打包、图标切换及一键卸载支持。
 - [ ] **Phase 1 并行探索工作流**：基于 DSH `workflow` API 实现新仓库并行波次探索（Broad Recursive Self-exploration）。
 - [ ] **Phase 2 自动化迭代循环**：实现针对特定难点任务的失败驱动迭代（Deep Recursive Self-exploration），全自动跑通 `FAIL -> Distill -> Practice -> Retry` 状态机。
 
