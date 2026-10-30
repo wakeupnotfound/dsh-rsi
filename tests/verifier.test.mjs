@@ -9,10 +9,13 @@ test('VerifierRuntime probe safety checks', () => {
   assert.equal(verifier.isProbeSafe('git status --porcelain'), true);
   assert.equal(verifier.isProbeSafe('npm test -- --reporter=tap'), true);
 
-  // Destructive commands must be blocked
+  // Destructive commands must be blocked (POSIX + Windows)
   assert.equal(verifier.isProbeSafe('rm -rf ./dist'), false);
   assert.equal(verifier.isProbeSafe('git reset --hard HEAD~1'), false);
   assert.equal(verifier.isProbeSafe('git clean -fd'), false);
+  assert.equal(verifier.isProbeSafe('rmdir /s /q C:\\temp'), false);
+  assert.equal(verifier.isProbeSafe('del /f /q *.*'), false);
+  assert.equal(verifier.isProbeSafe('Remove-Item -Recurse -Force ./build'), false);
 });
 
 test('VerifierRuntime runProbe execution', async () => {

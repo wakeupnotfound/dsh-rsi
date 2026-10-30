@@ -63,5 +63,17 @@
   "homepage": "https://github.com/wakeupnotfound/dsh-rsi#readme",
   "bugs": {
     "url": "https://github.com/wakeupnotfound/dsh-rsi/issues"
-  }
+  },
+  "files": [
+    "bin",
+    "lib",
+    "locale",
+    "cordis.patch.yml",
+    "dsh-plugin.json",
+    "icon.png",
+    "LICENSE",
+    "README.md",
+    "README_ZH.md",
+    "docs"
+  ]
 }
