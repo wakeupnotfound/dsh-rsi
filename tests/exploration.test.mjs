@@ -72,7 +72,7 @@ test('verify=false never yields committable lessons', async () => {
 
 test('lessonToEntry produces the four-section memory format', () => {
   const entry = lessonToEntry({ ...lesson('Use npm run build!'), verification: { verdict: 'PASS', evidence: 'exit 0' } });
-  assert.match(entry.id, /^exploration-use-npm-run-build-[0-9a-f]{8}$/);
+  assert.match(entry.id, /^exploration-use-npm-run-build-[0-9a-f]{10}$/);
   assert.equal(entry.verified, true);
   assert.ok(entry.tags.includes('rsi-exploration'));
   for (const h of ['### Preconditions & Context', '### Proven Rule / Recommended Action', '### Pitfall / Failure Mechanism', '### Evidence', 'VERDICT: PASS']) {
@@ -95,16 +95,16 @@ test('lessonToEntry and MemoryBank preserve distinct CJK titles without collisio
   const e1 = lessonToEntry({ title: '中文规则甲', category: 'workflow', preconditions: 'p1', procedure: 'do甲', pitfall: 'pf1', evidence: 'ev1' });
   const e2 = lessonToEntry({ title: '中文规则乙', category: 'workflow', preconditions: 'p2', procedure: 'do乙', pitfall: 'pf2', evidence: 'ev2' });
 
-  assert.match(e1.id, /^exploration-中文规则甲-[0-9a-f]{8}$/);
-  assert.match(e2.id, /^exploration-中文规则乙-[0-9a-f]{8}$/);
+  assert.match(e1.id, /^exploration-中文规则甲-[0-9a-f]{10}$/);
+  assert.match(e2.id, /^exploration-中文规则乙-[0-9a-f]{10}$/);
   assert.notEqual(e1.id, e2.id);
 
   const res1 = await bank.save(e1, 'workspace');
   const res2 = await bank.save(e2, 'workspace');
 
   assert.notEqual(res1.path, res2.path);
-  assert.match(res1.path, /exploration-中文规则甲-[0-9a-f]{8}.md$/);
-  assert.match(res2.path, /exploration-中文规则乙-[0-9a-f]{8}.md$/);
+  assert.match(res1.path, /exploration-中文规则甲-[0-9a-f]{10}.md$/);
+  assert.match(res2.path, /exploration-中文规则乙-[0-9a-f]{10}.md$/);
 
   // Additional collision guards: punctuation variations & long titles differing only after 80 chars
   const punc1 = lessonToEntry({ title: '规则甲！', procedure: 'punc1' });
@@ -122,4 +122,37 @@ test('lessonToEntry and MemoryBank preserve distinct CJK titles without collisio
   const read2 = await bank.get(e2.id);
   assert.equal(read1.title, '中文规则甲');
   assert.equal(read2.title, '中文规则乙');
+
+  // Verify persistence and non-collision on disk for punctuation variations
+  const sPunc1 = await bank.save(punc1, 'workspace');
+  const sPunc2 = await bank.save(punc2, 'workspace');
+  assert.notEqual(sPunc1.path, sPunc2.path);
+  const rPunc1 = await bank.get(punc1.id);
+  const rPunc2 = await bank.get(punc2.id);
+  assert.ok(rPunc1.content.includes('punc1'));
+  assert.ok(rPunc2.content.includes('punc2'));
+
+  // Test full content hash: identical title/preconditions/procedure, but differing pitfall/evidence
+  const diffPitfall1 = lessonToEntry({
+    title: '并发写入规范',
+    preconditions: '多进程环境',
+    procedure: 'PRAGMA busy_timeout = 5000',
+    pitfall: '未设超时导致 SQLITE_BUSY 报错',
+    evidence: '错误码 5'
+  });
+  const diffPitfall2 = lessonToEntry({
+    title: '并发写入规范',
+    preconditions: '多进程环境',
+    procedure: 'PRAGMA busy_timeout = 5000',
+    pitfall: '事务锁未释放导致死锁',
+    evidence: '连接池占满 100%'
+  });
+  assert.notEqual(diffPitfall1.id, diffPitfall2.id, 'Rules differing only in pitfall/evidence must produce distinct IDs');
+  const sDiff1 = await bank.save(diffPitfall1, 'workspace');
+  const sDiff2 = await bank.save(diffPitfall2, 'workspace');
+  assert.notEqual(sDiff1.path, sDiff2.path);
+  const rDiff1 = await bank.get(diffPitfall1.id);
+  const rDiff2 = await bank.get(diffPitfall2.id);
+  assert.ok(rDiff1.content.includes('未设超时导致 SQLITE_BUSY 报错'), 'First pitfall must survive on disk');
+  assert.ok(rDiff2.content.includes('事务锁未释放导致死锁'), 'Second pitfall must survive on disk');
 });
