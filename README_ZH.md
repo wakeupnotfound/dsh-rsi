@@ -6,7 +6,7 @@
 
 ---
 
-## 🎯 核心解决的问题
+## 核心解决的问题
 
 当前大模型驱动的 AI Agent 在复杂操作系统与代码库中作业时普遍面临三大瓶颈：
 1. **假阳性自欺欺人（False-Done）**：Agent 自己写代码、自己验证，容易沿用自身错误的初始假设，宣布“假成功”。
@@ -17,7 +17,7 @@
 
 ---
 
-## 🧩 核心机制与架构映射
+## 核心机制与架构映射
 
 | RSIAgent 论文核心机制 | DSH 插件实现 (`dsh-rsi`) | 作用与价值 |
 | :--- | :--- | :--- |
@@ -29,7 +29,7 @@
 
 ---
 
-## 📦 项目结构
+## 项目结构
 
 ```text
 dsh-rsi/
@@ -60,7 +60,7 @@ dsh-rsi/
 
 ---
 
-## 🚀 快速上手
+## 快速上手
 
 ### 1. 独立 CLI 体验与测试
 
@@ -106,7 +106,7 @@ npm test
 
 ---
 
-## 🔌 配置为 DeepSeek Harness 插件
+## 配置为 DeepSeek Harness 插件
 
 在 DSH 的配置目录（如 `~/.dsh/profiles/desktop/cordis.patch.yml`）中添加本插件引用：
 
@@ -131,7 +131,7 @@ npm test
 
 ---
 
-## 🛠 注册的 DSH Tools 说明
+## 注册的 DSH Tools 说明
 
 1. **`rsi_verify`**：
    - 接收任务诉求与交付物，运行只读探针（自动拦截任何潜在破坏性操作如 `rm -rf`, `git reset --hard` 等），生成双盲验收 Prompt。
@@ -144,7 +144,7 @@ npm test
 
 ---
 
-## 🗺️ 后续演进计划 (Roadmap)
+## 后续演进计划 (Roadmap)
 
 - [x] **MVP 阶段**：Epistemic Core 注入、独立双盲 Verifier、持久化 Memory Bank、因果提炼与记忆对齐。
 - [ ] **Phase 1 工作流**：基于 DSH `workflow` API 实现新仓库并行波次探索（Broad Recursive Self-exploration）。

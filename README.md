@@ -17,7 +17,7 @@
 
 ---
 
-## 🧭 项目简介
+## 项目简介
 
 **dsh-rsi** 是为 **DeepSeek Harness (DSH)** 桌面 AI Agent 环境量身定制的**递归自我改进（RSI）引擎与官方标准插件**。
 
@@ -25,7 +25,7 @@
 
 ---
 
-## 🎯 痛点与核心价值
+## 痛点与核心价值
 
 当前大模型驱动的 AI Coding Agent 在复杂工程任务中普遍面临三大痛点：
 
@@ -41,20 +41,20 @@
 
 ---
 
-## 🧩 模块化组件（DSH 规范）
+## 模块化组件（DSH 规范）
 
 `dsh-rsi` 严格遵循 DSH 的 Bundle 与 Component 规范，拆分为 **3 个独立可启停的运行中组件**：
 
 ```text
 dsh-rsi (v0.1.0)
 │
-├── 🛡️ dsh-rsi-verifier   [RSIAgent 独立双盲验证器]
+├── dsh-rsi-verifier   [RSIAgent 独立双盲验证器]
 │     └── 基于 Epistemic 准则对候选交付物执行独立只读探针，防范 Agent 自欺与假阳性 (False-Done)。
 │
-├── 🧠 dsh-rsi-memory     [可演化持久记忆库]
+├── dsh-rsi-memory     [可演化持久记忆库]
 │     └── 跨任务可演化持久记忆库：因果规程提炼、前置条件捕获与全局冲突消解 (Reconciliation)。
 │
-└── 📜 dsh-rsi-epistemic  [认识论真理信道 (E1-E6)]
+└── dsh-rsi-epistemic  [认识论真理信道 (E1-E6)]
       └── 向系统提示词注入 E1-E6 认识论准则：以真实环境探针为准，严禁臆测，错误即证据。
 ```
 
@@ -62,11 +62,7 @@ dsh-rsi (v0.1.0)
 
 ---
 
-## 🔄 核心工作流：递归自进化闭环
-
-<p align="center">
-  <img src="docs/assets/architecture-overview.png" alt="RSIAgent for DSH 架构与协同闭环" width="100%">
-</p>
+## 核心工作流：递归自进化闭环
 
 整个自我进化生命周期遵循以下 5 步状态流转：
 1. **任务启动**：注入 E1-E6 认识论法则，挂载当前持久记忆库清单，Actor 使用 Code-as-Policy 编写和执行代码；
@@ -77,11 +73,7 @@ dsh-rsi (v0.1.0)
 
 ---
 
-## 🚀 部署方式详解（Deployment Methods）
-
-<p align="center">
-  <img src="docs/assets/deployment-workflow.png" alt="DSH 插件部署、图标管理与卸载全流程指南" width="100%">
-</p>
+## 部署方式详解（Deployment Methods）
 
 ### 方式一：开发调试部署（推荐，实时生效）
 
@@ -135,53 +127,6 @@ dsh-rsi (v0.1.0)
 
 ---
 
-## 🎨 图标管理：删除、恢复默认与个性化更换
-
-### 场景 A：删除自定义图标（恢复 DSH 系统默认图标）
-如果你希望恢复为 DSH 系统原生的蓝色网格/几何方块默认图标：
-1. **删除项目中的 `icon.png`**：
-   ```bash
-   rm /Users/juheng/Documents/AgentProjects/dsh-rsi/icon.png
-   ```
-2. **移除配置声明**：
-   编辑 `package.json` 和 `dsh-plugin.json`，删去 `"icon": "./icon.png"` 这一行。
-3. **重新打包并重启 DSH**：
-   DSH 的 `readPluginMeta` 检测不到图标时，将自动优雅回退至内建的 `DefaultArtwork`。
-
-### 场景 B：更换为自定义图标（如动漫头像或企业 Logo）
-1. 准备一张 256×256 分辨率的 PNG 格式图片；
-2. 覆盖到项目根目录：
-   ```bash
-   cp your-avatar.png /Users/juheng/Documents/AgentProjects/dsh-rsi/icon.png
-   ```
-3. 重新打包更新 `~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz`，重启 DSH 即可呈现新图标。
-
----
-
-## 🗑️ 插件卸载与数据清理
-
-### 方式一：DSH 图形界面一键卸载（UI 按钮）
-在 DSH 的「**设置**」→「**插件**」→「**dsh-rsi**」详情页右上角，点击红色的 **`[🗑 卸载]`** 按钮：
-- DSH 会自动调用内置的 `removeBundle` 机制；
-- 自动将 `dsh-rsi` 从 `package.json` 的 `dsh.profile.bundles` 中注销并停止服务。
-
-### 方式二：手动彻底清理
-如需在磁盘上完全清除所有相关安装项：
-```bash
-# 1. 移除软链接
-rm ~/.dsh/profiles/desktop/node_modules/dsh-rsi
-
-# 2. 移除压缩安装包
-rm ~/.dsh/plugin-packages/dsh-rsi-*.tgz
-
-# 3. 从 ~/.dsh/profiles/desktop/package.json 移除 "dsh-rsi" 项
-
-# 4. 可选：清空历史积累的持久记忆库数据
-rm -rf ~/.dsh/storages/rsi
-```
-
----
-
 ## 🛠 注册的 DSH Tools
 
 插件向 DSH 注册了 4 个高阶工具，Agent 可在对话中自主调用：
@@ -205,7 +150,7 @@ rm -rf ~/.dsh/storages/rsi
 
 ---
 
-## 💻 快速体验与 CLI 使用
+## 快速体验与 CLI 使用
 
 除了作为 DSH 插件在后台无感运行外，`dsh-rsi` 提供了独立的终端 CLI 工具 `rsi`：
 
@@ -230,7 +175,7 @@ node bin/rsi.mjs list
 
 ---
 
-## 🧪 自动化测试套件
+## 自动化测试套件
 
 项目采用 Node.js 原生测试运行器（`node:test`），零外部测试框架依赖，极速稳定：
 
@@ -258,7 +203,7 @@ ok 10 - VerifierRuntime parseReport handling and doubt enforcement
 
 ---
 
-## 📦 项目完整目录架构
+## 项目完整目录架构
 
 ```text
 dsh-rsi/
@@ -294,7 +239,7 @@ dsh-rsi/
 
 ---
 
-## 🗺️ 后续演进计划 (Roadmap)
+## 后续演进计划 (Roadmap)
 
 - [x] **MVP 阶段**：E1-E6 Epistemic Core 注入、独立双盲 Verifier 探针验收、双作用域 Memory Bank、因果经验提炼与跨语料 Reconciliation。
 - [x] **DSH 组件化规范适配**：独立子组件包结构、专属 256px 图标、多语言本地化配置。
@@ -304,7 +249,7 @@ dsh-rsi/
 
 ---
 
-## ⚖️ 许可证
+## 许可证
 
 本项目依据 [Apache License 2.0](LICENSE) 开源。
 
