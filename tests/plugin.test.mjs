@@ -123,10 +123,23 @@ test('rsi_explore and rsi_practice execute via workflowEngine and commit only au
     }
   };
 
+  // Emulates DSH delegation group isolation:
+  // Root context and parent agent.ctx do NOT directly expose workflowEngine (it is isolated to the child delegation group).
+  // The DSH agentPresets service provides serviceFor(agent, 'workflowEngine') to resolve services inside the isolated preset mount.
+  const mockAgentPresets = {
+    serviceFor: (agent, serviceName) => {
+      if (serviceName === 'workflowEngine' && engineAvailable) {
+        return mockAgentWorkflowEngine;
+      }
+      return undefined;
+    }
+  };
+
   const mockCtx = {
     get: (key) => {
       if (key === 'workingDirectory') return { get: () => tmpDir, ensure: async () => tmpDir };
-      // Root context does not have workflowEngine (isolated to delegation group in cordis.yml)
+      if (key === 'agentPresets') return mockAgentPresets;
+      // Root context does NOT have workflowEngine
       return undefined;
     },
     tools: { register: (def) => { tools.set(def.name, def); return () => {}; } },
@@ -140,8 +153,9 @@ test('rsi_explore and rsi_practice execute via workflowEngine and commit only au
     agent: {
       id: 'agent-1',
       session: { header: { cwd: tmpDir } },
+      // Parent agent.ctx does NOT have workflowEngine directly (due to delegation group isolate: true)
       ctx: {
-        get: (key) => (key === 'workflowEngine' && engineAvailable ? mockAgentWorkflowEngine : undefined)
+        get: (key) => (key === 'agentPresets' ? mockAgentPresets : undefined)
       }
     },
     signal: new AbortController().signal

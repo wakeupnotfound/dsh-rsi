@@ -153,8 +153,9 @@ dsh-rsi (v0.1.0)
 - **功能**：提供关键词检索、标签筛选和分类查询，帮助 Agent 在新任务启动时按需调阅过往验证过的避坑指南。
 
 ### 5. `rsi_explore`（Phase 1 并行波次自探索）
-- **功能**：针对新仓库或环境，通过 DSH workflow 引擎调度并行 Subagent 进行结构化探索。
+- **功能**：针对新仓库或环境，通过 `agentPresets.serviceFor(agent, 'workflowEngine')` 穿透 Cordis delegation 组隔离调度并行 Subagent 进行结构化探索。
 - **机制**：Wave 1 多维度调研 ➔ Wave 2 针对跟进疑问进行深度探针 ➔ 独立 Verifier 双盲伪证审计 ➔ 通过规则对齐入库。
+- *环境提示*：在自动执行模式下（`mode: 'auto'`），需要当前会话所属 DSH Preset 启用了 workflow 引擎（如 PTC 预设）。若预设禁用了 workflow 引擎（如默认 standard 预设），工具将返回结构化工作流编排脚本与指引，执行后通过 `workflow_result` 提交入库。
 
 ### 6. `rsi_practice`（Phase 2 失败驱动深度练习）
 - **功能**：针对困难任务运行 `FAIL ➔ Distill ➔ Practice ➔ Retry` 状态机。

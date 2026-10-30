@@ -30,7 +30,7 @@ A major finding in agent failure audits is **semantic entanglement**: when an ac
 In `dsh-rsi`, verification strictly adheres to:
 1. **Zero-History Context**: The Verifier never receives the Actor's reasoning traces, self-checks, or scratchpad.
 2. **Read-Only Discipline**: Probes are filtered through `isProbeSafe()` as a heuristic defense-in-depth layer against common accidental mutations (deletions, writes, in-place edits, installations), complementing DSH filesystem sandboxing.
-3. **Doubt Invariant**: `VERDICT: PASS` requires the `doubts` field to be strictly empty. Any unresolved material doubt triggers an automatic downgrade to `FAIL`.
+3. **Doubt Invariant**: `VERDICT: PASS` requires an explicit, affirmative attestation in `DOUBTS:` (e.g., `None` or `无`). Any unresolved material doubt triggers an automatic downgrade to `FAIL`. Following Epistemic axiom E4 (*Silence proves nothing*), an omitted or blank `DOUBTS:` section is treated as absence of proof and automatically downgraded to `FAIL`.
 
 ---
 
@@ -74,6 +74,17 @@ As memory grows, agents risk preserving contradictory advice (e.g., one rule adv
 ```
 
 When a user task begins, the agent is already primed with ground-truth discipline and the current memory inventory. When a task completes, the agent invokes verification and memory tools to commit newly learned experience.
+
+### Cordis Preset Delegation Isolation & Service Resolution
+DSH isolates `workflowEngine` inside the Agent preset's `delegation` group (`cordis.yml` with `isolate: { workflowEngine: true }`). Top-level plugin contexts cannot resolve this isolated symbol directly through `ctx.get('workflowEngine')`.
+To bridge this boundary, `dsh-rsi` resolves the engine through:
+```javascript
+const presets = service(agent.ctx, 'agentPresets') ?? service(ctx, 'agentPresets');
+const engine = presets?.serviceFor?.(agent, 'workflowEngine')
+  ?? service(agent.ctx, 'workflowEngine')
+  ?? service(ctx, 'workflowEngine');
+```
+When running under presets where `workflowEngine` is disabled (such as the default `standard` desktop preset), the tools gracefully fall back to `status: 'workflow_script'` mode with complete runnable scripts.
 
 ---
 

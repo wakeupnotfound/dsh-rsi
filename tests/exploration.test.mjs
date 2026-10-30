@@ -72,7 +72,7 @@ test('verify=false never yields committable lessons', async () => {
 
 test('lessonToEntry produces the four-section memory format', () => {
   const entry = lessonToEntry({ ...lesson('Use npm run build!'), verification: { verdict: 'PASS', evidence: 'exit 0' } });
-  assert.equal(entry.id, 'exploration-use-npm-run-build');
+  assert.match(entry.id, /^exploration-use-npm-run-build-[0-9a-f]{8}$/);
   assert.equal(entry.verified, true);
   assert.ok(entry.tags.includes('rsi-exploration'));
   for (const h of ['### Preconditions & Context', '### Proven Rule / Recommended Action', '### Pitfall / Failure Mechanism', '### Evidence', 'VERDICT: PASS']) {
@@ -95,16 +95,25 @@ test('lessonToEntry and MemoryBank preserve distinct CJK titles without collisio
   const e1 = lessonToEntry({ title: '中文规则甲', category: 'workflow', preconditions: 'p1', procedure: 'do甲', pitfall: 'pf1', evidence: 'ev1' });
   const e2 = lessonToEntry({ title: '中文规则乙', category: 'workflow', preconditions: 'p2', procedure: 'do乙', pitfall: 'pf2', evidence: 'ev2' });
 
-  assert.equal(e1.id, 'exploration-中文规则甲');
-  assert.equal(e2.id, 'exploration-中文规则乙');
+  assert.match(e1.id, /^exploration-中文规则甲-[0-9a-f]{8}$/);
+  assert.match(e2.id, /^exploration-中文规则乙-[0-9a-f]{8}$/);
   assert.notEqual(e1.id, e2.id);
 
   const res1 = await bank.save(e1, 'workspace');
   const res2 = await bank.save(e2, 'workspace');
 
   assert.notEqual(res1.path, res2.path);
-  assert.ok(res1.path.endsWith('exploration-中文规则甲.md'));
-  assert.ok(res2.path.endsWith('exploration-中文规则乙.md'));
+  assert.match(res1.path, /exploration-中文规则甲-[0-9a-f]{8}.md$/);
+  assert.match(res2.path, /exploration-中文规则乙-[0-9a-f]{8}.md$/);
+
+  // Additional collision guards: punctuation variations & long titles differing only after 80 chars
+  const punc1 = lessonToEntry({ title: '规则甲！', procedure: 'punc1' });
+  const punc2 = lessonToEntry({ title: '规则甲？', procedure: 'punc2' });
+  assert.notEqual(punc1.id, punc2.id, 'Punctuation variations must have distinct IDs via content hash');
+
+  const long1 = lessonToEntry({ title: 'A'.repeat(100) + '1', procedure: 'long1' });
+  const long2 = lessonToEntry({ title: 'A'.repeat(100) + '2', procedure: 'long2' });
+  assert.notEqual(long1.id, long2.id, 'Long titles differing after truncation must have distinct IDs via content hash');
 
   const files = await fs.readdir(path.join(tmpDir, '.rsi', 'memory'));
   assert.equal(files.filter(f => f.endsWith('.md')).length, 2);

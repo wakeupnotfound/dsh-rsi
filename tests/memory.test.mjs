@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { MemoryBank } from '../lib/core/memory.js';
+import { MemoryBank, memoryFileName } from '../lib/core/memory.js';
 
 test('MemoryBank CRUD operations and tree hashing', async (t) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-test-'));
@@ -59,4 +59,13 @@ test('MemoryBank CRUD operations and tree hashing', async (t) => {
   assert.equal(deleted, true);
   const afterDelete = await bank.listAll();
   assert.equal(afterDelete.length, 0);
+
+  // Test Windows reserved device names in memoryFileName
+  assert.equal(memoryFileName('con'), '_con.md');
+  assert.equal(memoryFileName('CON'), '_CON.md');
+  assert.equal(memoryFileName('NUL'), '_NUL.md');
+  assert.equal(memoryFileName('aux'), '_aux.md');
+  assert.equal(memoryFileName('com1'), '_com1.md');
+  assert.equal(memoryFileName('lpt3'), '_lpt3.md');
+  assert.equal(memoryFileName('normal-rule'), 'normal-rule.md');
 });

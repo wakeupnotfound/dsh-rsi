@@ -97,4 +97,13 @@ VERDICT: FAIL
   const missingDoubts = verifier.parseReport('VERDICT: PASS');
   assert.equal(missingDoubts.verdict, VERDICTS.FAIL);
   assert.ok(missingDoubts.reasons.some(r => r.includes('without mandatory DOUBTS section')));
+
+  // Blank/empty DOUBTS section (silence, no affirmative attestation) must downgrade to FAIL (E4)
+  const blankDoubts1 = verifier.parseReport('DOUBTS:\nVERDICT: PASS');
+  assert.equal(blankDoubts1.verdict, VERDICTS.FAIL);
+  assert.ok(blankDoubts1.reasons.some(r => r.includes('without affirmative empty doubts attestation')));
+
+  const blankDoubts2 = verifier.parseReport('DOUBTS:   \n\nVERDICT: PASS');
+  assert.equal(blankDoubts2.verdict, VERDICTS.FAIL);
+  assert.ok(blankDoubts2.reasons.some(r => r.includes('without affirmative empty doubts attestation')));
 });

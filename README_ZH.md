@@ -188,9 +188,9 @@ ok 24 - VerifierRuntime parseReport handling and doubt enforcement
 4. **`rsi_query_memory`**（检索持久记忆）：
    - 支持关键词、分类与标签检索，Agent 在任务启动时按需调阅避坑指南。
 5. **`rsi_explore`**（Phase 1 并行波次自探索）：
-   - 针对新环境与新仓库，优先通过当前调用 Agent 作用域的 DSH workflow 引擎调度并行 Subagent（构建、测试、工具链、规范、踩坑点）；
+   - 针对新环境与新仓库，通过 `agentPresets.serviceFor(agent, 'workflowEngine')` 穿透 Cordis delegation 组隔离调度并行 Subagent（构建、测试、工具链、规范、踩坑点）；
    - 第二波次针对第一波次提出的疑问进行深度探针，所有候选经验均经独立 Verifier 审计，仅双盲通过的规则才会入库；
-   - *环境提示*：若当前会话 preset 禁用了 workflow 引擎（如默认 standard 预设），工具将返回结构化工作流编排脚本与指引，执行后通过 `workflow_result` 提交入库。
+   - *环境提示*：若当前会话 preset 禁用了 workflow 引擎（如默认 standard 桌面预设禁用），工具将返回结构化工作流编排脚本与指引，执行后通过 `workflow_result` 提交入库。
 6. **`rsi_practice`**（Phase 2 失败驱动深度迭代）：
    - 驱动困难任务跑通 `FAIL ➔ Distill ➔ Practice ➔ Retry` 状态机；
    - 每次失败后提炼假设，并在独立隔离环境中进行刻意练习（Practice）验证修正规程，再携新知识重试。
