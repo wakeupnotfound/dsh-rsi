@@ -16,6 +16,25 @@ test('VerifierRuntime probe safety checks', () => {
   assert.equal(verifier.isProbeSafe('rmdir /s /q C:\\temp'), false);
   assert.equal(verifier.isProbeSafe('del /f /q *.*'), false);
   assert.equal(verifier.isProbeSafe('Remove-Item -Recurse -Force ./build'), false);
+  // Expanded safety checks: plain rm, redirection, git checkout, sed -i, package install
+  assert.equal(verifier.isProbeSafe('rm file.txt'), false);
+  assert.equal(verifier.isProbeSafe('echo pwn > package.json'), false);
+  assert.equal(verifier.isProbeSafe('git checkout -- .'), false);
+  assert.equal(verifier.isProbeSafe('sed -i "s/a/b/" file.js'), false);
+  assert.equal(verifier.isProbeSafe('npm install left-pad'), false);
+  // Additional heuristic checks: inline interpreter writes, install, rsync, archive extraction
+  assert.equal(verifier.isProbeSafe('node -e "require(\'fs\').writeFileSync(\'x.txt\',\'y\')"'), false);
+  assert.equal(verifier.isProbeSafe('python3 -c "open(\'x.txt\',\'w\').write(\'y\')"'), false);
+  assert.equal(verifier.isProbeSafe('install -m 755 a /usr/local/bin/a'), false);
+  assert.equal(verifier.isProbeSafe('rsync -a src/ dest/'), false);
+  assert.equal(verifier.isProbeSafe('tar -xzf pkg.tgz'), false);
+  assert.equal(verifier.isProbeSafe('unzip archive.zip'), false);
+  // Benign reads, inspects, and JS arrows stay allowed
+  assert.equal(verifier.isProbeSafe('tar -tzf pkg.tgz'), true);
+  assert.equal(verifier.isProbeSafe('python3 --version'), true);
+  assert.equal(verifier.isProbeSafe('npm test 2>&1'), true);
+  assert.equal(verifier.isProbeSafe('ls >/dev/null 2>&1'), true);
+  assert.equal(verifier.isProbeSafe('node -e "[1].map(x => x)"'), true);
 });
 
 test('VerifierRuntime runProbe execution', async () => {
@@ -68,4 +87,14 @@ VERDICT: FAIL
   const resFail = verifier.parseReport(cleanFail);
   assert.equal(resFail.verdict, VERDICTS.FAIL);
   assert.equal(resFail.isFail, true);
+
+  // Punctuated/localized empty doubts ("None.", "无") stay PASS; conflicting verdicts become UNVERIFIED
+  assert.equal(verifier.parseReport('DOUBTS: None.\nVERDICT: PASS').verdict, VERDICTS.PASS);
+  assert.equal(verifier.parseReport('DOUBTS: 无\n\nVERDICT: PASS').verdict, VERDICTS.PASS);
+  assert.equal(verifier.parseReport('VERDICT: PASS\nVERDICT: FAIL').verdict, VERDICTS.UNVERIFIED);
+
+  // Missing DOUBTS section on PASS must downgrade to FAIL (E4: silence proves nothing)
+  const missingDoubts = verifier.parseReport('VERDICT: PASS');
+  assert.equal(missingDoubts.verdict, VERDICTS.FAIL);
+  assert.ok(missingDoubts.reasons.some(r => r.includes('without mandatory DOUBTS section')));
 });

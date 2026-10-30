@@ -214,7 +214,9 @@ Without busy_timeout, SQLite defaults to 0ms wait and immediately throws SQLITE_
     assert.ok(registeredTools.has('rsi_distill_memory'));
     assert.ok(registeredTools.has('rsi_reconcile_memory'));
     assert.ok(registeredTools.has('rsi_query_memory'));
-    console.log('✅ All 2 prompt sections and 4 DSH tools registered in lifecycle.');
+    assert.ok(registeredTools.has('rsi_explore'));
+    assert.ok(registeredTools.has('rsi_practice'));
+    console.log('✅ All 2 prompt sections and 6 DSH tools registered in lifecycle.');
 
     // 6.1 Execute rsi_verify tool
     const rsiVerifyTool = registeredTools.get('rsi_verify');

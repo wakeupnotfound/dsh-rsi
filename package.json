@@ -29,6 +29,11 @@
     },
     "./epistemic/package.json": "./lib/components/epistemic/package.json",
     "./epistemic/locale/*.json": "./lib/components/epistemic/locale/*.json",
+    "./explorer": {
+      "default": "./lib/components/explorer/index.js"
+    },
+    "./explorer/package.json": "./lib/components/explorer/package.json",
+    "./explorer/locale/*.json": "./lib/components/explorer/locale/*.json",
     "./core": "./lib/core/index.js",
     "./tools": "./lib/tools/definitions.js"
   },
@@ -49,7 +54,9 @@
     "recursive-self-improvement",
     "epistemic-core",
     "independent-verifier",
-    "memory-distillation"
+    "memory-distillation",
+    "self-exploration",
+    "workflow"
   ],
   "author": "wakeupnotfound <gzlhomlj@gmail.com>",
   "license": "Apache-2.0",

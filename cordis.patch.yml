@@ -13,3 +13,6 @@
       config:
         epistemicPromptOrder: 3100
         memoryPromptOrder: 3110
+    - id: dsh-rsi-explorer
+      name: dsh-rsi/explorer
+      config: {}

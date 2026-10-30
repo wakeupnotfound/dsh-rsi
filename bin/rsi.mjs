@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 
-import { MemoryBank, VerifierRuntime, renderEpistemicSection, renderMemoryPreamble } from '../lib/core/index.js';
+import {
+  MemoryBank,
+  VerifierRuntime,
+  ExplorationPlanner,
+  PracticePlanner,
+  renderEpistemicSection,
+  renderMemoryPreamble
+} from '../lib/core/index.js';
 
 const [,, command, ...args] = process.argv;
 
 async function main() {
   const bank = new MemoryBank({ workspaceDir: process.cwd() });
-  await bank.init();
 
   switch (command) {
     case 'status': {
@@ -55,6 +61,26 @@ async function main() {
       break;
     }
 
+    case 'explore': {
+      // Emits a workflow request (meta/script/args) for the DSH workflow tool.
+      const objective = args.join(' ') || undefined;
+      const known = (await bank.listAll()).map(e => e.title);
+      const request = new ExplorationPlanner().buildWorkflow({ repoPath: process.cwd(), objective, knownLessons: known });
+      console.log(JSON.stringify(request, null, 2));
+      break;
+    }
+
+    case 'practice': {
+      const objective = args.join(' ');
+      if (!objective) {
+        console.error('Usage: rsi practice "<hard task objective>"');
+        process.exit(1);
+      }
+      const request = new PracticePlanner().buildWorkflow({ objective, workdir: process.cwd() });
+      console.log(JSON.stringify(request, null, 2));
+      break;
+    }
+
     case 'prompt': {
       console.log('=== Rendered Epistemic Core ===\n');
       console.log(renderEpistemicSection());
@@ -74,6 +100,8 @@ Usage:
   rsi query <text>        Search memory bank for procedures and pitfalls
   rsi verify <objective>  Generate independent verifier audit prompt
   rsi prompt              Inspect injected Epistemic Core and memory inventory
+  rsi explore [objective] Emit the Phase 1 broad-exploration workflow request (JSON)
+  rsi practice <task>     Emit the Phase 2 FAIL->Distill->Practice->Retry workflow request (JSON)
 `);
       break;
     }

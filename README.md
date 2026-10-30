@@ -21,7 +21,7 @@
 
 **dsh-rsi** 是为 **DeepSeek Harness (DSH)** 桌面 AI Agent 环境量身定制的**递归自我改进（RSI）引擎与官方标准插件**。
 
-本项目工程化落地了学术前沿论文 [**RSIAgent: Autonomous Exploration for Recursive Self-improvement in New Environments**](https://arxiv.org/abs/2609.15364)（Aether AI 联合 UCSD、UIC 发表于 2026 年）的核心理论。在**完全保持大模型底层权重冻结（Frozen Weights）**的前提下，通过**独立双盲验证（Double-Blind Verifier）**与**因果可演化持久记忆库（Evolvable Memory Bank）**，使 Agent 能够在新环境、复杂软件与大型工程项目中自主试错、吸取教训，实现“跨会话、跨任务的经验连续进化”。
+本项目工程化落地了学术前沿论文 [**RSIAgent: Autonomous Exploration for Recursive Self-improvement in New Environments**](https://arxiv.org/abs/2609.15364)（Aether AI 联合 UCSD、UIC 发表于 2026 年）的核心理论。在**完全保持大模型底层权重冻结（Frozen Weights）**的前提下，通过**独立双盲验证（Double-Blind Verifier）**、**因果可演化持久记忆库（Evolvable Memory Bank）**以及**并行自探索与刻意练习引擎**，使 Agent 能够在新环境、复杂软件与大型工程项目中自主试错、吸取教训，实现“跨会话、跨任务的经验连续进化”。
 
 ---
 
@@ -43,7 +43,7 @@
 
 ## 模块化组件（DSH 规范）
 
-`dsh-rsi` 严格遵循 DSH 的 Bundle 与 Component 规范，拆分为 **3 个独立可启停的运行中组件**：
+`dsh-rsi` 严格遵循 DSH 的 Bundle 与 Component 规范，拆分为 **4 个独立可启停的运行中组件**：
 
 ```text
 dsh-rsi (v0.1.0)
@@ -54,8 +54,11 @@ dsh-rsi (v0.1.0)
 ├── dsh-rsi-memory     [可演化持久记忆库]
 │     └── 跨任务可演化持久记忆库：因果规程提炼、前置条件捕获与全局冲突消解 (Reconciliation)。
 │
-└── dsh-rsi-epistemic  [认识论真理信道 (E1-E6)]
-      └── 向系统提示词注入 E1-E6 认识论准则：以真实环境探针为准，严禁臆测，错误即证据。
+├── dsh-rsi-epistemic  [认识论真理信道 (E1-E6)]
+│     └── 向系统提示词注入 E1-E6 认识论准则：以真实环境探针为准，严禁臆测，错误即证据。
+│
+└── dsh-rsi-explorer   [递归自探索与练习引擎]
+      └── 基于 DSH workflow 引擎调度并行波次仓库探索（Phase 1）与失败驱动重试练习（Phase 2）。
 ```
 
 在 DSH 的「**设置**」→「**插件**」详情中，各组件均可独立开启或停用，并完整显示中文本地化标题、描述与状态指示灯。
@@ -64,12 +67,13 @@ dsh-rsi (v0.1.0)
 
 ## 核心工作流：递归自进化闭环
 
-整个自我进化生命周期遵循以下 5 步状态流转：
-1. **任务启动**：注入 E1-E6 认识论法则，挂载当前持久记忆库清单，Actor 使用 Code-as-Policy 编写和执行代码；
+整个自我进化生命周期遵循闭环流转：
+1. **任务启动**：注入 E1-E6 认识论法则，同步挂载当前持久记忆库清单，Actor 使用 Code-as-Policy 编写和执行代码；
 2. **双盲验收**：产物完成后自动由 Verifier 开启无历史独立 Subagent，运行只读探针探测物理环境，执行疑点一票否决；
 3. **因果经验提炼**：Actor 复盘整条轨迹与审计反馈，抽取因果机理与避坑关键点；
 4. **冲突排查对齐**：Reconciler 遍历记忆库，利用 Jaccard 相似度与极性检测，自动为旧冲突规则打上 `SUPERSEDED` 标记；
-5. **经验沉淀进阶**：计算新记忆库的 Tree SHA-256 哈希并持久化，供后续所有任务无缝继承。
+5. **波次自探索（Phase 1）**：针对全新仓库，通过 `rsi_explore` 调度多波次并行探测，审计后批量入库；
+6. **失败驱动迭代（Phase 2）**：针对困难任务，通过 `rsi_practice` 跑通 `FAIL ➔ Distill ➔ Practice ➔ Retry`，隔离试验验证后重试。
 
 ---
 
@@ -84,26 +88,26 @@ dsh-rsi (v0.1.0)
    ln -s "/Users/juheng/Documents/AgentProjects/dsh-rsi" ~/.dsh/profiles/desktop/node_modules/dsh-rsi
    ```
 2. **在桌面 Profile 中注册**：
-   在 `~/.dsh/profiles/desktop/package.json` 中配置：
-   ```json
-   {
-     "name": "dsh-profile-desktop",
-     "private": true,
-     "dsh": {
-       "profile": {
-         "bundles": [
-           "@deepseek-ai/dsh-base",
-           "@deepseek-ai/dsh-web-app",
-           "dsh-ops",
-           "dsh-rsi"
-         ]
-       }
-     },
-     "dependencies": {
-       "dsh-ops": "file:/Users/juheng/.dsh/plugin-packages/dsh-ops-0.3.1.tgz",
-       "dsh-rsi": "file:/Users/juheng/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz"
-     }
-   }
+   在 `~/.dsh/profiles/desktop/cordis.patch.yml` 中插入组件配置：
+   ```yaml
+   - insert:
+       - id: dsh-rsi-verifier
+         name: dsh-rsi/verifier
+         config:
+           probeTimeoutMs: 30000
+           maxProbes: 10
+       - id: dsh-rsi-memory
+         name: dsh-rsi/memory
+         config:
+           enabled: true
+       - id: dsh-rsi-epistemic
+         name: dsh-rsi/epistemic
+         config:
+           epistemicPromptOrder: 3100
+           memoryPromptOrder: 3110
+       - id: dsh-rsi-explorer
+         name: dsh-rsi/explorer
+         config: {}
    ```
 3. **重启 DeepSeek Harness**：完全退出并重新打开应用。
    > **优势**：修改 `lib/` 源码无需重新打包，刷新或重启即可实时加载最新代码。
@@ -122,20 +126,20 @@ dsh-rsi (v0.1.0)
    ```
 2. **确认文件归档路径**：
    `~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz`
-3. **在 DSH 桌面 Profile 中关联该归档**（如方式一中的 `dependencies` 字段所示）。
-4. **重启 DSH**，详情页来源信息将清晰标明为 `file:.../dsh-rsi-0.1.0.tgz`。
+3. **在 DSH 桌面 Profile 中关联该归档**。
+4. **重启 DSH**。
 
 ---
 
-## 🛠 注册的 DSH Tools
+## 🛠 注册的 6 大 DSH Tools
 
-插件向 DSH 注册了 4 个高阶工具，Agent 可在对话中自主调用：
+插件向 DSH 注册了 6 个高阶工具，满足 DSH strict output schema 与 lossless JSON 契约：
 
 ### 1. `rsi_verify`（独立双盲验证）
-- **功能**：对当前任务的交付物执行无污染的只读独立探针审计。
+- **功能**：对当前任务的交付物执行只读独立探针审计。
 - **机制**：
-  - 自动拦截一切潜在破坏性命令（如 `rm -rf`, `git reset --hard` 等）；
-  - 严格执行 **Doubt Invariant**：如果最终报告中包含未解决的实质性疑问（Doubts），即使标有 PASS 也会自动强制降级为 FAIL。
+  - 启发式静态拦截常见破坏性指令（如 `rm`, `git reset --hard`, `sed -i`, 文件重定向、代码写入、包管理变更等），与 DSH 只读进程沙箱配合实现纵深防御；
+  - 严格执行 **Doubt Invariant**：若报告缺失明确的 DOUBTS 段落（E4 沉默不代表没有），或包含未消除存疑，即使标有 PASS 也强制降级为 FAIL。
 
 ### 2. `rsi_distill_memory`（因果经验提炼）
 - **功能**：在任务完成后，基于验证器的成败报告与执行轨迹提炼可复用的因果规则。
@@ -143,10 +147,18 @@ dsh-rsi (v0.1.0)
 
 ### 3. `rsi_reconcile_memory`（全局记忆对齐）
 - **功能**：检查记忆库中是否存在与新经验冲突的陈旧规则。
-- **机制**：通过分词 Jaccard 重叠与反义语义分析，自动定位冲突规则并为其追加 `> ⚠️ SUPERSEDED / CONFLICT NOTICE` 注释。
+- **机制**：通过分词 Jaccard 重叠与反义语义分析，自动定位冲突规则并为其追加 `> ⚠️ SUPERSEDED / CONFLICT NOTICE` 注释，同时维护原始存储作用域。
 
 ### 4. `rsi_query_memory`（检索持久记忆）
 - **功能**：提供关键词检索、标签筛选和分类查询，帮助 Agent 在新任务启动时按需调阅过往验证过的避坑指南。
+
+### 5. `rsi_explore`（Phase 1 并行波次自探索）
+- **功能**：针对新仓库或环境，通过 DSH workflow 引擎调度并行 Subagent 进行结构化探索。
+- **机制**：Wave 1 多维度调研 ➔ Wave 2 针对跟进疑问进行深度探针 ➔ 独立 Verifier 双盲伪证审计 ➔ 通过规则对齐入库。
+
+### 6. `rsi_practice`（Phase 2 失败驱动深度练习）
+- **功能**：针对困难任务运行 `FAIL ➔ Distill ➔ Practice ➔ Retry` 状态机。
+- **机制**：验证失败后提取根因规则，并在独立临时目录进行最小隔离实验（Practice）验证修正方案，再携新知识重试。
 
 ---
 
@@ -171,6 +183,12 @@ node bin/rsi.mjs query "git"
 
 # 5. 列出所有沉淀的经验文件
 node bin/rsi.mjs list
+
+# 6. 生成 Phase 1 仓库并行自探索工作流脚本
+node bin/rsi.mjs explore
+
+# 7. 生成 Phase 2 失败驱动练习迭代工作流脚本
+node bin/rsi.mjs practice "解决 SQLite 高并发写入锁冲突"
 ```
 
 ---
@@ -184,21 +202,35 @@ cd /Users/juheng/Documents/AgentProjects/dsh-rsi
 npm test
 ```
 
-**测试结果（10/10 单元测试全数通过）：**
+**测试结果（24/24 单元与端到端测试全数通过）：**
 ```text
 TAP version 13
 ok 1 - MemoryDistiller prompt creation and entry parsing
-ok 2 - Epistemic Core rules completeness
-ok 3 - renderEpistemicSection includes all E1-E6 principles
-ok 4 - renderMemoryPreamble formats empty and populated inventory
-ok 5 - MemoryBank CRUD operations and tree hashing
-ok 6 - DSH plugin lifecycle mounts prompt sections and tools
-ok 7 - MemoryReconciler contradiction detection and resolution
-ok 8 - VerifierRuntime probe safety checks
-ok 9 - VerifierRuntime runProbe execution
-ok 10 - VerifierRuntime parseReport handling and doubt enforcement
-1..10
-# tests 10 | pass 10 | fail 0 | duration 51ms
+ok 2 - /Users/juheng/Documents/AgentProjects/dsh-rsi/tests/e2e_simulation.test.mjs
+ok 3 - Epistemic Core rules completeness
+ok 4 - renderEpistemicSection includes all E1-E6 principles
+ok 5 - renderMemoryPreamble formats empty and populated inventory
+ok 6 - ExplorationPlanner builds a valid workflow request
+ok 7 - exploration script runs waves, audits double-blind, and enforces the doubt invariant
+ok 8 - verify=false never yields committable lessons
+ok 9 - lessonToEntry produces the four-section memory format
+ok 10 - lessonToEntry and MemoryBank preserve distinct CJK titles without collision
+ok 11 - MemoryBank CRUD operations and tree hashing
+ok 12 - tool definitions declare DSH-compatible output schemas and renderers
+ok 13 - DSH plugin lifecycle enforces strict host contracts (output, sync sections, disposers)
+ok 14 - rsi_explore and rsi_practice execute via workflowEngine and commit only audited lessons
+ok 15 - transition table rejects illegal moves
+ok 16 - normalizeVerdict applies the doubt invariant
+ok 17 - PracticeLoop: FAIL -> Distill -> Practice -> Retry -> PASS
+ok 18 - PracticeLoop: exhausts the attempt budget
+ok 19 - practice workflow script follows the same state machine, double-blind
+ok 20 - practice workflow script ends EXHAUSTED when every attempt fails
+ok 21 - MemoryReconciler contradiction detection and resolution
+ok 22 - VerifierRuntime probe safety checks
+ok 23 - VerifierRuntime runProbe execution
+ok 24 - VerifierRuntime parseReport handling and doubt enforcement
+1..24
+# tests 24 | pass 24 | fail 0 | duration ~95ms
 ```
 
 ---
@@ -210,26 +242,35 @@ dsh-rsi/
 ├── bin/
 │   └── rsi.mjs                  # CLI 命令行工具入口
 ├── lib/
-│   ├── index.js                 # DSH / Cordis 插件入口 (applyComponent)
-│   ├── components/              # 3 大模块化子组件
+│   ├── index.js                 # DSH / Cordis 插件入口 (apply / applyComponent)
+│   ├── components/              # 4 大模块化子组件
 │   │   ├── verifier/            # 独立双盲验证器组件
 │   │   ├── memory/              # 可演化持久记忆库组件
-│   │   └── epistemic/           # 认识论真理信道组件
+│   │   ├── epistemic/           # 认识论真理信道组件
+│   │   └── explorer/            # 递归自探索与练习组件
 │   ├── core/                    # 算法核心层
 │   │   ├── epistemic.js         # E1-E6 认识论公理及系统提示词渲染器
 │   │   ├── verifier.js          # 独立双盲验收引擎与只读探针安全拦截器
 │   │   ├── memory.js            # 记忆库读写、Tree Hash 计算与双作用域管理
 │   │   ├── distillation.js      # 因果规则提炼与结构化解析器
-│   │   └── reconciliation.js    # 语料库一致性排查与废弃标注器
+│   │   ├── reconciliation.js    # 语料库一致性排查与废弃标注器
+│   │   ├── exploration.js       # Phase 1 并行波次探索与独立审计
+│   │   └── practice.js          # Phase 2 失败驱动迭代状态机
 │   └── tools/
-│       └── definitions.js       # DSH Tools 契约与 JSON Schema 参数声明
+│       └── definitions.js       # DSH Tools 契约与 JSON Schema 参数及输出声明
 ├── locale/                      # 根包多语言翻译 (zh.json, en.json)
-├── tests/                       # 单元测试套件
+├── tests/                       # 单元与集成测试套件
+│   ├── epistemic.test.mjs
+│   ├── memory.test.mjs
+│   ├── verifier.test.mjs
+│   ├── distillation.test.mjs
+│   ├── reconciliation.test.mjs
+│   ├── exploration.test.mjs
+│   ├── practice.test.mjs
+│   ├── plugin.test.mjs
+│   └── e2e_simulation.test.mjs
 ├── docs/
-│   ├── ARCHITECTURE.md          # 详细架构映射与技术设计文档
-│   └── assets/                  # 高清架构配图与部署流程图
-│       ├── architecture-overview.png
-│       └── deployment-workflow.png
+│   └── ARCHITECTURE.md          # 详细架构映射与技术设计文档
 ├── cordis.patch.yml             # Cordis 组件装配清单
 ├── dsh-plugin.json              # DSH 规范 Manifest 清单 (v0.15)
 ├── package.json                 # Node ESM 规范配置
@@ -242,10 +283,10 @@ dsh-rsi/
 ## 后续演进计划 (Roadmap)
 
 - [x] **MVP 阶段**：E1-E6 Epistemic Core 注入、独立双盲 Verifier 探针验收、双作用域 Memory Bank、因果经验提炼与跨语料 Reconciliation。
-- [x] **DSH 组件化规范适配**：独立子组件包结构、专属 256px 图标、多语言本地化配置。
-- [x] **全流程部署指南与高清架构图**：开发软链接、离线打包、图标切换及一键卸载支持。
-- [ ] **Phase 1 并行探索工作流**：基于 DSH `workflow` API 实现新仓库并行波次探索（Broad Recursive Self-exploration）。
-- [ ] **Phase 2 自动化迭代循环**：实现针对特定难点任务的失败驱动迭代（Deep Recursive Self-exploration），全自动跑通 `FAIL -> Distill -> Practice -> Retry` 状态机。
+- [x] **DSH 组件化规范适配**：4 大独立子组件包结构、专属 256px 图标、多语言本地化配置。
+- [x] **全流程部署指南与架构文档**：开发软链接、离线打包、图标切换及一键卸载支持。
+- [x] **Phase 1 并行探索工作流**：基于 DSH `workflow` API 实现新仓库并行波次探索（Broad Recursive Self-exploration）。
+- [x] **Phase 2 自动化迭代循环**：实现针对特定难点任务的失败驱动迭代（Deep Recursive Self-exploration），全自动跑通 `FAIL -> Distill -> Practice -> Retry` 状态机。
 
 ---
 

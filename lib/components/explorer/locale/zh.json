@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "RSIAgent 递归自探索",
+    "description": "基于 DSH workflow 的并行波次仓库探索与失败驱动迭代，经独立双盲复核后沉淀为记忆"
+  }
+}

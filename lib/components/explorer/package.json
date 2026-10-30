@@ -1,0 +1,6 @@
+{
+  "name": "dsh-rsi-explorer",
+  "description": "RSI 递归自探索：并行波次仓库探索（Phase 1）与失败驱动的 FAIL→Distill→Practice→Retry 迭代（Phase 2）。",
+  "icon": "./icon.png",
+  "type": "module"
+}

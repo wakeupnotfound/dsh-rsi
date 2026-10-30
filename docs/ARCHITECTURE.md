@@ -29,7 +29,7 @@ A major finding in agent failure audits is **semantic entanglement**: when an ac
 ### The Double-Blind Solution
 In `dsh-rsi`, verification strictly adheres to:
 1. **Zero-History Context**: The Verifier never receives the Actor's reasoning traces, self-checks, or scratchpad.
-2. **Read-Only Discipline**: Probes are verified through `isProbeSafe()` to prevent mutation of candidate outputs.
+2. **Read-Only Discipline**: Probes are filtered through `isProbeSafe()` as a heuristic defense-in-depth layer against common accidental mutations (deletions, writes, in-place edits, installations), complementing DSH filesystem sandboxing.
 3. **Doubt Invariant**: `VERDICT: PASS` requires the `doubts` field to be strictly empty. Any unresolved material doubt triggers an automatic downgrade to `FAIL`.
 
 ---
@@ -49,9 +49,9 @@ A common pitfall of naive memory systems is storing raw logs or trivial summarie
 As memory grows, agents risk preserving contradictory advice (e.g., one rule advocating `--bail`, another warning that `--bail` suppresses vital error streams).
 
 `MemoryReconciler` implements:
-- Jaccard token overlap indexing to detect related entries.
+- Jaccard token overlap indexing (supporting both ASCII keywords and CJK bigrams) to detect related entries.
 - Semantic polarity analysis (affirmative vs. prohibitive phrases).
-- Automated deprecation annotations (`SUPERSEDED / CONFLICT NOTICE`) on legacy rules.
+- Automated deprecation annotations (`SUPERSEDED / CONFLICT NOTICE`) on legacy rules while preserving their originating storage scope.
 
 ---
 
@@ -61,14 +61,75 @@ As memory grows, agents risk preserving contradictory advice (e.g., one rule adv
 [DSH Boot / Profile Load]
           │
           ├──> Mount Prompt Sections:
-          │      - epistemic-core (E1-E6 rules)
-          │      - memory-inventory (scanned from ~/.dsh/storages/rsi)
+          │      - epistemic-core (E1-E6 rules, order 3100)
+          │      - memory-inventory (scanned from ~/.dsh/storages/rsi and .rsi, order 3110)
           │
           └──> Mount Tool Handlers:
                  - rsi_verify
                  - rsi_distill_memory
                  - rsi_reconcile_memory
                  - rsi_query_memory
+                 - rsi_explore  (Phase 1 Broad Exploration)
+                 - rsi_practice (Phase 2 Deep Practice State Machine)
 ```
 
-When a user task begins, the agent is already primed with ground-truth discipline and the current memory inventory. When a task completes, the agent invokes `rsi_verify` and `rsi_distill_memory` to commit the newly learned experience.
+When a user task begins, the agent is already primed with ground-truth discipline and the current memory inventory. When a task completes, the agent invokes verification and memory tools to commit newly learned experience.
+
+---
+
+## 6. Phase 1: Parallel-Wave Broad Self-Exploration (`rsi_explore`)
+
+When an agent enters a new codebase or environment, exploring sequentially in a single turn is token-inefficient and prone to early hallucination. `ExplorationPlanner` generates a DSH workflow script that coordinates parallel subagents:
+
+```text
+[Wave 1: Parallel Survey by Facet]
+  ├── Facet: build-and-run
+  ├── Facet: test-suite
+  ├── Facet: toolchain & deps
+  ├── Facet: architecture & conventions
+  └── Facet: failure-modes & pitfalls
+          │
+          ▼
+   (Collect candidate lessons & deduplicate follow-up questions)
+          │
+          ▼
+[Wave 2: Deep Probes on Follow-Ups]
+  ├── Probe 1: Edge cases & flag verification
+  └── Probe 2: Flaky test root-causes
+          │
+          ▼
+[Double-Blind Audit Pipeline]
+  └── Independent Verifier tests each candidate lesson with read-only probes
+          │
+          ▼ (Only PASS without doubts accepted)
+[Memory Reconciliation & Persistence]
+```
+
+---
+
+## 7. Phase 2: Failure-Driven Deep Practice (`rsi_practice`)
+
+For challenging tasks where initial attempts fail, RSIAgent applies a closed-loop state machine:
+
+```text
+  ATTEMPT
+     │
+     ▼ (attempted)
+  VERIFY ───[pass (clean)]───► DISTILL_SUCCESS ──► DONE
+     │
+   [fail]
+     │
+     ▼
+  DISTILL_FAILURE ───[budget exhausted]───► EXHAUSTED
+     │ (distilled)
+     ▼
+  PRACTICE (isolated scratch experiment confirming the rule)
+     │
+     ▼ (practiced)
+  RETRY ──(retry)──► ATTEMPT (seeded with refined procedure)
+```
+
+Key invariants:
+- **Zero-leaking Verifier**: The verifier only receives the task objective and declared deliverable paths.
+- **Deliberate Practice**: Before attempting the full task again, the agent conducts an isolated test in a temporary directory to validate the corrective rule.
+- **Full Traceability**: All state transitions (`transitions`) are recorded and auditable.

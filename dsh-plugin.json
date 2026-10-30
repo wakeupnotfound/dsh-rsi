@@ -29,6 +29,11 @@
       "name": "dsh-rsi.subprocess.probe",
       "scope": "subprocess",
       "reason": "Execute independent read-only inspection probes for Verifier candidate acceptance"
+    },
+    {
+      "name": "dsh-rsi.workflow.orchestrate",
+      "scope": "subprocess",
+      "reason": "Start RSI exploration and practice workflows through the DSH workflow engine on behalf of the calling agent"
     }
   ],
   "contributes": {
@@ -65,7 +70,9 @@
           "verify",
           "distill_memory",
           "reconcile_memory",
-          "query_memory"
+          "query_memory",
+          "explore",
+          "practice"
         ]
       }
     ],
@@ -87,6 +94,13 @@
       {
         "id": "dsh-rsi-epistemic",
         "entry": "dsh-rsi/epistemic",
+        "defaultEnabled": true,
+        "platforms": ["win32", "linux", "darwin"],
+        "targets": ["win32-x64", "linux-x64", "darwin-arm64"]
+      },
+      {
+        "id": "dsh-rsi-explorer",
+        "entry": "dsh-rsi/explorer",
         "defaultEnabled": true,
         "platforms": ["win32", "linux", "darwin"],
         "targets": ["win32-x64", "linux-x64", "darwin-arm64"]
