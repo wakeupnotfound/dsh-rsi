@@ -51,9 +51,17 @@
     "independent-verifier",
     "memory-distillation"
   ],
-  "author": "Antigravity Team",
+  "author": "wakeupnotfound <gzlhomlj@gmail.com>",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wakeupnotfound/dsh-rsi.git"
+  },
+  "homepage": "https://github.com/wakeupnotfound/dsh-rsi#readme",
+  "bugs": {
+    "url": "https://github.com/wakeupnotfound/dsh-rsi/issues"
   }
 }
