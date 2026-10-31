@@ -159,6 +159,9 @@ test('lessonToEntry and MemoryBank preserve distinct CJK titles without collisio
   const savedPass = await bank.save(reauditPass, 'workspace');
   const readUpdated = await bank.get(reauditPass.id);
   assert.ok(readUpdated.content.includes('passed on re-audit'), 'Re-audit must update the entry in place');
+  const allReauditFiles = (await fs.readdir(path.join(tmpDir, '.rsi', 'memory'))).filter(f => f.includes('重审稳定性规则'));
+  assert.equal(allReauditFiles.length, 1, 'In-place re-audit must produce exactly one file without orphaned duplicates');
+  assert.equal((await bank.search({ query: '重审稳定性规则' })).length, 1, 'In-place re-audit must return exactly one search result');
 
   // Test full content hash: identical title/preconditions/procedure, but differing pitfall/evidence
   const diffPitfall1 = lessonToEntry({

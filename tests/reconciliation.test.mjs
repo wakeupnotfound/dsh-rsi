@@ -45,3 +45,49 @@ test('MemoryReconciler contradiction detection and resolution', async (t) => {
   assert.match(updatedOld.content, /SUPERSEDED \/ CONFLICT NOTICE/);
   assert.ok(updatedOld.tags.includes('deprecated'));
 });
+
+test('MemoryReconciler supersedes old entry when same lesson topic procedure evolves', async (t) => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-recon-topic-'));
+  const bank = new MemoryBank({ workspaceDir: tempDir });
+  const reconciler = new MemoryReconciler();
+
+  t.after(async () => {
+    try { await fs.rm(tempDir, { recursive: true, force: true }); } catch {}
+  });
+
+  await bank.init();
+
+  // Old rule with legacy build procedure (no negation keywords)
+  await bank.save({
+    id: 'exploration-build-legacy',
+    title: 'run npm run build',
+    category: 'workflow',
+    tags: ['build'],
+    content: 'run npm run build --legacy-peer-deps on release builds'
+  }, 'workspace');
+
+  // Evolved rule with modern procedure (no negation keywords)
+  const evolvedEntry = {
+    id: 'exploration-build-modern',
+    title: 'run npm run build',
+    category: 'workflow',
+    tags: ['build'],
+    content: 'run npm run build --modern-deps on release builds'
+  };
+
+  const commitResult = await reconciler.reconcileAndCommit(bank, evolvedEntry, 'workspace');
+
+  assert.ok(commitResult.committed);
+  assert.equal(commitResult.reconciliationReport.conflictsResolved, 1);
+  assert.ok(commitResult.reconciliationReport.conflicts[0].reason.includes('Same lesson topic'));
+
+  // Old rule must be annotated as superseded despite absence of negation words
+  const oldEntry = await bank.get('exploration-build-legacy');
+  assert.match(oldEntry.content, /SUPERSEDED \/ CONFLICT NOTICE/);
+  assert.ok(oldEntry.tags.includes('deprecated'));
+  assert.ok(oldEntry.tags.includes('superseded'));
+
+  // New rule is active without deprecated tag
+  const newEntry = await bank.get('exploration-build-modern');
+  assert.ok(!newEntry.tags.includes('deprecated'));
+});

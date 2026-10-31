@@ -49,9 +49,11 @@ A common pitfall of naive memory systems is storing raw logs or trivial summarie
 As memory grows, agents risk preserving contradictory advice (e.g., one rule advocating `--bail`, another warning that `--bail` suppresses vital error streams).
 
 `MemoryReconciler` implements:
-- Jaccard token overlap indexing (supporting both ASCII keywords and CJK bigrams) to detect related entries.
-- Semantic polarity analysis (affirmative vs. prohibitive phrases).
-- Automated deprecation annotations (`SUPERSEDED / CONFLICT NOTICE`) on legacy rules while preserving their originating storage scope.
+- **Exact ID in-place update**: When `newEntry.id === oldEntry.id`, re-audited or revised rules update in-place without duplicating.
+- **Same-topic evolution supersession**: When `slugify(newEntry.title) === slugify(oldEntry.title)` but IDs differ (e.g., procedure or pitfall evolved), the old rule is automatically annotated as `SUPERSEDED`.
+- **Semantic polarity contradiction**: For distinct topics with high Jaccard overlap (>35%), negation pattern analysis detects opposing directives (e.g., `always` vs `never`, `required` vs `optional/prohibited`) and supersedes the older rule.
+- **Related topic non-destructive merge**: Overlapping entries without direct contradictions are cataloged as `related_topic` without deprecating either rule.
+- **Scope preservation**: Superseded annotations preserve the rule's originating storage scope (`workspace` vs `global`).
 
 ---
 

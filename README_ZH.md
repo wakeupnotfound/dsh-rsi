@@ -107,7 +107,7 @@ node bin/rsi.mjs practice "修复在 Node 20 下间歇性超时的网络请求�
 npm test
 ```
 
-**测试结果（24 个单元与端到端测试全数通过）：**
+**测试结果（25 个单元与端到端测试全数通过）：**
 ```text
 TAP version 13
 ok 1 - MemoryDistiller prompt creation and entry parsing
@@ -131,11 +131,12 @@ ok 18 - PracticeLoop: exhausts the attempt budget
 ok 19 - practice workflow script follows the same state machine, double-blind
 ok 20 - practice workflow script ends EXHAUSTED when every attempt fails
 ok 21 - MemoryReconciler contradiction detection and resolution
-ok 22 - VerifierRuntime probe safety checks
-ok 23 - VerifierRuntime runProbe execution
-ok 24 - VerifierRuntime parseReport handling and doubt enforcement
-1..24
-# tests 24 | pass 24 | fail 0
+ok 22 - MemoryReconciler supersedes old entry when same lesson topic procedure evolves
+ok 23 - VerifierRuntime probe safety checks
+ok 24 - VerifierRuntime runProbe execution
+ok 25 - VerifierRuntime parseReport handling and doubt enforcement
+1..25
+# tests 25 | pass 25 | fail 0
 ```
 
 ---
@@ -184,7 +185,7 @@ ok 24 - VerifierRuntime parseReport handling and doubt enforcement
 2. **`rsi_distill_memory`**（因果经验提炼）：
    - 任务终态触发，提取前置条件、有效规程、踩坑机理三元组因果知识，结构化入库。
 3. **`rsi_reconcile_memory`**（全局记忆对齐）：
-   - 跨语料检测冲突，支持中英文双向分词，自动为旧冲突规则打上 `SUPERSEDED` 标记并保留原有作用域。
+   - 跨语料检测冲突与版本演进：同主题规程演进（同标题不同规程）或跨规则反义极性矛盾时自动将旧规则标记为 `SUPERSEDED`（无矛盾重叠作为 `related_topic` 保留），同时维护原始存储作用域。
 4. **`rsi_query_memory`**（检索持久记忆）：
    - 支持关键词、分类与标签检索，Agent 在任务启动时按需调阅避坑指南。
 5. **`rsi_explore`**（Phase 1 并行波次自探索）：

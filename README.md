@@ -146,8 +146,8 @@ dsh-rsi (v0.1.0)
 - **产物**：包含 YAML Frontmatter（ID、标签、分类、验证标记）以及「前置条件 / 推荐规程 / 避坑机理 / 证据」四段式的结构化 Markdown。
 
 ### 3. `rsi_reconcile_memory`（全局记忆对齐）
-- **功能**：检查记忆库中是否存在与新经验冲突的陈旧规则。
-- **机制**：通过分词 Jaccard 重叠与反义语义分析，自动定位冲突规则并为其追加 `> ⚠️ SUPERSEDED / CONFLICT NOTICE` 注释，同时维护原始存储作用域。
+- **功能**：检查记忆库中是否存在与新经验冲突或被演进取代的陈旧规则。
+- **机制**：支持同主题规程演进自动废弃旧版；跨规则高重叠通过反义极性分析检测直接矛盾并追加 `> ⚠️ SUPERSEDED / CONFLICT NOTICE` 注释（无矛盾则保留并建立 `related_topic` 关联），同时维护原始存储作用域。
 
 ### 4. `rsi_query_memory`（检索持久记忆）
 - **功能**：提供关键词检索、标签筛选和分类查询，帮助 Agent 在新任务启动时按需调阅过往验证过的避坑指南。
@@ -203,7 +203,7 @@ cd /Users/juheng/Documents/AgentProjects/dsh-rsi
 npm test
 ```
 
-**测试结果（24/24 单元与端到端测试全数通过）：**
+**测试结果（25/25 单元与端到端测试全数通过）：**
 ```text
 TAP version 13
 ok 1 - MemoryDistiller prompt creation and entry parsing
@@ -227,11 +227,12 @@ ok 18 - PracticeLoop: exhausts the attempt budget
 ok 19 - practice workflow script follows the same state machine, double-blind
 ok 20 - practice workflow script ends EXHAUSTED when every attempt fails
 ok 21 - MemoryReconciler contradiction detection and resolution
-ok 22 - VerifierRuntime probe safety checks
-ok 23 - VerifierRuntime runProbe execution
-ok 24 - VerifierRuntime parseReport handling and doubt enforcement
-1..24
-# tests 24 | pass 24 | fail 0 | duration ~95ms
+ok 22 - MemoryReconciler supersedes old entry when same lesson topic procedure evolves
+ok 23 - VerifierRuntime probe safety checks
+ok 24 - VerifierRuntime runProbe execution
+ok 25 - VerifierRuntime parseReport handling and doubt enforcement
+1..25
+# tests 25 | pass 25 | fail 0 | duration ~97ms
 ```
 
 ---

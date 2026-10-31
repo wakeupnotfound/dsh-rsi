@@ -195,6 +195,43 @@ test('rsi_explore and rsi_practice execute via workflowEngine and commit only au
   assert.equal(boundaryCheck.committed[0].title, 'Clean manual rule');
   assert.equal(boundaryCheck.skipped_unaudited, 1, 'PASS-with-doubts is rejected at boundary');
 
+  // Test practice workflow_result re-audit: failure advancing to success updates same ID in-place
+  const practiceSpec = {
+    title: 'Practice reaudit spec',
+    category: 'workflow',
+    tags: ['db'],
+    preconditions: 'pre',
+    procedure: 'proc',
+    pitfall: 'pit',
+    evidence: 'ev',
+    verifyCommand: 'test'
+  };
+
+  const practiceFailResult = await tools.get('rsi_practice').execute({
+    workflow_result: {
+      kind: 'rsi-practice',
+      lessons: [{ ...practiceSpec, outcome: 'failure', verification: { verdict: 'FAIL', doubts: 'failed', evidence: 'no' } }]
+    }
+  }, exec);
+  assert.equal(practiceFailResult.status, 'committed');
+  assert.equal(practiceFailResult.committed.length, 1);
+  const failEntryId = practiceFailResult.committed[0].id;
+
+  const practiceSuccessResult = await tools.get('rsi_practice').execute({
+    workflow_result: {
+      kind: 'rsi-practice',
+      lessons: [{ ...practiceSpec, outcome: 'success', verification: { verdict: 'PASS', doubts: 'None', evidence: 'yes' } }]
+    }
+  }, exec);
+  assert.equal(practiceSuccessResult.status, 'committed');
+  assert.equal(practiceSuccessResult.committed.length, 1);
+  const successEntryId = practiceSuccessResult.committed[0].id;
+
+  assert.equal(failEntryId, successEntryId, 'Practice failure advancing to success must retain identical ID despite outcome tags');
+  const allPracticeEntries = (await tools.get('rsi_query_memory').execute({ query: 'Practice reaudit spec' }, exec)).matches;
+  assert.equal(allPracticeEntries.length, 1, 'In-place re-audit must not leave orphaned failure duplicates');
+  assert.ok(allPracticeEntries[0].tags.includes('outcome-success'), 'Updated entry must have outcome-success tag');
+
   const queried = await tools.get('rsi_query_memory').execute({ query: '' }, exec);
-  assert.equal(queried.count, 3);
+  assert.equal(queried.count, 4);
 });
