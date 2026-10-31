@@ -106,14 +106,14 @@ test('lessonToEntry and MemoryBank preserve distinct CJK titles without collisio
   assert.match(res1.path, /exploration-中文规则甲-[0-9a-f]{10}.md$/);
   assert.match(res2.path, /exploration-中文规则乙-[0-9a-f]{10}.md$/);
 
-  // Additional collision guards: punctuation variations & long titles differing only after 80 chars
-  const punc1 = lessonToEntry({ title: '规则甲！', procedure: 'punc1' });
-  const punc2 = lessonToEntry({ title: '规则甲？', procedure: 'punc2' });
-  assert.notEqual(punc1.id, punc2.id, 'Punctuation variations must have distinct IDs via content hash');
+  // Pure title-isolated collision guards: procedure, preconditions, and pitfalls are 100% IDENTICAL
+  const punc1 = lessonToEntry({ title: '规则甲！', procedure: 'identical_proc', preconditions: 'pre', pitfall: 'pit' });
+  const punc2 = lessonToEntry({ title: '规则甲？', procedure: 'identical_proc', preconditions: 'pre', pitfall: 'pit' });
+  assert.notEqual(punc1.id, punc2.id, 'Punctuation variations alone must produce distinct IDs via content hash');
 
-  const long1 = lessonToEntry({ title: 'A'.repeat(100) + '1', procedure: 'long1' });
-  const long2 = lessonToEntry({ title: 'A'.repeat(100) + '2', procedure: 'long2' });
-  assert.notEqual(long1.id, long2.id, 'Long titles differing after truncation must have distinct IDs via content hash');
+  const long1 = lessonToEntry({ title: 'A'.repeat(100) + '1', procedure: 'identical_proc', preconditions: 'pre', pitfall: 'pit' });
+  const long2 = lessonToEntry({ title: 'A'.repeat(100) + '2', procedure: 'identical_proc', preconditions: 'pre', pitfall: 'pit' });
+  assert.notEqual(long1.id, long2.id, 'Long titles differing only after truncation must produce distinct IDs via content hash');
 
   const files = await fs.readdir(path.join(tmpDir, '.rsi', 'memory'));
   assert.equal(files.filter(f => f.endsWith('.md')).length, 2);
@@ -123,14 +123,42 @@ test('lessonToEntry and MemoryBank preserve distinct CJK titles without collisio
   assert.equal(read1.title, '中文规则甲');
   assert.equal(read2.title, '中文规则乙');
 
-  // Verify persistence and non-collision on disk for punctuation variations
+  // Verify persistence and non-collision on disk for pure punctuation variations
   const sPunc1 = await bank.save(punc1, 'workspace');
   const sPunc2 = await bank.save(punc2, 'workspace');
   assert.notEqual(sPunc1.path, sPunc2.path);
   const rPunc1 = await bank.get(punc1.id);
   const rPunc2 = await bank.get(punc2.id);
-  assert.ok(rPunc1.content.includes('punc1'));
-  assert.ok(rPunc2.content.includes('punc2'));
+  assert.equal(rPunc1.title, '规则甲！');
+  assert.equal(rPunc2.title, '规则甲？');
+
+  // Verify persistence and non-collision on disk for pure long title truncation variations
+  const sLong1 = await bank.save(long1, 'workspace');
+  const sLong2 = await bank.save(long2, 'workspace');
+  assert.notEqual(sLong1.path, sLong2.path);
+  const rLong1 = await bank.get(long1.id);
+  const rLong2 = await bank.get(long2.id);
+  assert.equal(rLong1.title, 'A'.repeat(100) + '1');
+  assert.equal(rLong2.title, 'A'.repeat(100) + '2');
+
+  // Test re-audit identity stability: exact same specification advancing from FAIL to PASS retains the same ID
+  const reauditFail = lessonToEntry({
+    title: '重审稳定性规则',
+    preconditions: 'pre',
+    procedure: 'proc',
+    verification: { verdict: 'FAIL', evidence: 'failed at first' }
+  });
+  const reauditPass = lessonToEntry({
+    title: '重审稳定性规则',
+    preconditions: 'pre',
+    procedure: 'proc',
+    verification: { verdict: 'PASS', evidence: 'passed on re-audit' }
+  });
+  assert.equal(reauditFail.id, reauditPass.id, 'Re-audited rule with same specification must maintain identity for in-place update');
+  await bank.save(reauditFail, 'workspace');
+  const savedPass = await bank.save(reauditPass, 'workspace');
+  const readUpdated = await bank.get(reauditPass.id);
+  assert.ok(readUpdated.content.includes('passed on re-audit'), 'Re-audit must update the entry in place');
 
   // Test full content hash: identical title/preconditions/procedure, but differing pitfall/evidence
   const diffPitfall1 = lessonToEntry({
