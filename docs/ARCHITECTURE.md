@@ -50,7 +50,7 @@ As memory grows, agents risk preserving contradictory advice (e.g., one rule adv
 
 `MemoryReconciler` implements:
 - **Exact ID in-place update**: When `newEntry.id === oldEntry.id`, re-audited or revised rules update in-place without duplicating.
-- **Same-topic evolution supersession**: When `slugify(newEntry.title) === slugify(oldEntry.title)` but IDs differ (e.g., procedure or pitfall evolved), the old rule is automatically annotated as `SUPERSEDED`.
+- **Guarded same-topic evolution supersession**: When the full un-truncated normalized title matches (`normalizeTitle(newEntry.title) === normalizeTitle(oldEntry.title)`), titles are non-generic, categories match, and content overlap exceeds threshold (>35%), the old rule is recognized as an evolved version and annotated as `SUPERSEDED`. Low-overlap rules, generic titles (e.g. `Untitled lesson`), and distinct long titles are preserved without false-positive deprecation.
 - **Semantic polarity contradiction**: For distinct topics with high Jaccard overlap (>35%), negation pattern analysis detects opposing directives (e.g., `always` vs `never`, `required` vs `optional/prohibited`) and supersedes the older rule.
 - **Related topic non-destructive merge**: Overlapping entries without direct contradictions are cataloged as `related_topic` without deprecating either rule.
 - **Scope preservation**: Superseded annotations preserve the rule's originating storage scope (`workspace` vs `global`).

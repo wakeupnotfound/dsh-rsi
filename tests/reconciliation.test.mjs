@@ -91,3 +91,42 @@ test('MemoryReconciler supersedes old entry when same lesson topic procedure evo
   const newEntry = await bank.get('exploration-build-modern');
   assert.ok(!newEntry.tags.includes('deprecated'));
 });
+
+test('MemoryReconciler avoids false-positive supersession on generic titles, low overlap, or truncated long titles', async (t) => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-recon-guards-'));
+  const bank = new MemoryBank({ workspaceDir: tempDir });
+  const reconciler = new MemoryReconciler();
+
+  t.after(async () => {
+    try { await fs.rm(tempDir, { recursive: true, force: true }); } catch {}
+  });
+
+  await bank.init();
+
+  // 1. Generic title with zero overlap
+  const gen1 = { id: 'gen-1', title: 'Untitled lesson', category: 'workflow', content: 'alpha beta gamma delta epsilon' };
+  const gen2 = { id: 'gen-2', title: 'Untitled lesson', category: 'workflow', content: 'zeta eta theta iota kappa lambda' };
+  await bank.save(gen1, 'workspace');
+  const resGen = await reconciler.reconcileAndCommit(bank, gen2, 'workspace');
+  assert.equal(resGen.reconciliationReport.conflictsResolved, 0, 'Generic titles must not trigger auto-supersession');
+  const checkGen1 = await bank.get('gen-1');
+  assert.ok(!checkGen1.tags.includes('deprecated'), 'Generic title rule 1 must remain active');
+
+  // 2. Long titles differing only after 80 chars
+  const long1 = { id: 'long-1', title: 'A'.repeat(100) + '1', category: 'workflow', content: 'common test content for long title 1' };
+  const long2 = { id: 'long-2', title: 'A'.repeat(100) + '2', category: 'workflow', content: 'common test content for long title 2' };
+  await bank.save(long1, 'workspace');
+  const resLong = await reconciler.reconcileAndCommit(bank, long2, 'workspace');
+  assert.equal(resLong.reconciliationReport.conflictsResolved, 0, 'Long titles differing after 80 chars must not be treated as same topic');
+  const checkLong1 = await bank.get('long-1');
+  assert.ok(!checkLong1.tags.includes('deprecated'), 'Long title rule 1 must remain active');
+
+  // 3. Same title but completely low overlap (unrelated tasks)
+  const low1 = { id: 'low-1', title: 'Build script', category: 'workflow', content: 'compile rust backend binary with cargo build --release' };
+  const low2 = { id: 'low-2', title: 'Build script', category: 'workflow', content: 'package electron desktop app with vite and electron-builder' };
+  await bank.save(low1, 'workspace');
+  const resLow = await reconciler.reconcileAndCommit(bank, low2, 'workspace');
+  assert.equal(resLow.reconciliationReport.conflictsResolved, 0, 'Same title with low overlap must not trigger auto-supersession');
+  const checkLow1 = await bank.get('low-1');
+  assert.ok(!checkLow1.tags.includes('deprecated'), 'Unrelated build script rule 1 must remain active');
+});

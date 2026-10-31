@@ -203,7 +203,7 @@ cd /Users/juheng/Documents/AgentProjects/dsh-rsi
 npm test
 ```
 
-**测试结果（25/25 单元与端到端测试全数通过）：**
+**测试结果（26/26 单元与端到端测试全数通过）：**
 ```text
 TAP version 13
 ok 1 - MemoryDistiller prompt creation and entry parsing
@@ -228,11 +228,12 @@ ok 19 - practice workflow script follows the same state machine, double-blind
 ok 20 - practice workflow script ends EXHAUSTED when every attempt fails
 ok 21 - MemoryReconciler contradiction detection and resolution
 ok 22 - MemoryReconciler supersedes old entry when same lesson topic procedure evolves
-ok 23 - VerifierRuntime probe safety checks
-ok 24 - VerifierRuntime runProbe execution
-ok 25 - VerifierRuntime parseReport handling and doubt enforcement
-1..25
-# tests 25 | pass 25 | fail 0 | duration ~97ms
+ok 23 - MemoryReconciler avoids false-positive supersession on generic titles, low overlap, or truncated long titles
+ok 24 - VerifierRuntime probe safety checks
+ok 25 - VerifierRuntime runProbe execution
+ok 26 - VerifierRuntime parseReport handling and doubt enforcement
+1..26
+# tests 26 | pass 26 | fail 0 | duration ~95ms
 ```
 
 ---
