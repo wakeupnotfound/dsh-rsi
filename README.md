@@ -9,6 +9,10 @@
 </p>
 
 <p align="center">
+  <strong>简体中文</strong> | <a href="README-EN.md">English</a>
+</p>
+
+<p align="center">
   <a href="https://arxiv.org/abs/2609.15364"><img src="https://img.shields.io/badge/Paper-arXiv%3A2609.15364-b31b1b?style=flat" alt="Paper: arXiv"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg?style=flat" alt="License: Apache 2.0"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/DSH_Plugin-v0.1.0-6554c0?style=flat" alt="DSH Plugin v0.1.0"></a>
@@ -128,7 +132,7 @@ dsh-rsi (v0.1.0)
 1. **打包归档为 `.tgz`**（按 `package.json` 的 `files` 白名单显式收集，排除测试、`.git`、`node_modules` 与 `.DS_Store`）：
    ```bash
    rm -rf /tmp/dsh-rsi-pkg && mkdir -p /tmp/dsh-rsi-pkg/package
-   cp -R bin lib locale docs cordis.patch.yml dsh-plugin.json package.json icon.png LICENSE README.md README_ZH.md /tmp/dsh-rsi-pkg/package/
+   cp -R bin lib locale docs cordis.patch.yml dsh-plugin.json package.json icon.png LICENSE README.md README-EN.md /tmp/dsh-rsi-pkg/package/
    find /tmp/dsh-rsi-pkg -name '.DS_Store' -delete
    tar -czf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz -C /tmp/dsh-rsi-pkg package
    tar -tzf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz | grep -c '.DS_Store'   # 期望输出 0
@@ -286,6 +290,8 @@ dsh-rsi/
 ├── cordis.patch.yml             # Cordis 组件装配清单
 ├── dsh-plugin.json              # DSH 规范 Manifest 清单 (v0.15)
 ├── package.json                 # Node ESM 规范配置
+├── README.md                    # 中文说明
+├── README-EN.md                 # English README
 ├── icon.png                     # 256x256 插件专属矢量图标
 └── LICENSE                      # Apache-2.0 许可证
 ```
