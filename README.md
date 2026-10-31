@@ -37,7 +37,7 @@
    - *解决*：**可演化持久记忆库**。任务终态（无论是通过还是失败）均触发因果提炼，沉淀“前置条件 ➔ 有效规程 ➔ 避坑机理”的三元组因果知识。
 3. **不可靠的经验固化（Scope Loss & Hallucination）**：
    - *问题*：模型容易把一次偶然的临时变通（如为避开某 bug 强行加的参数）当成普适真理，污染后续所有任务。
-   - *解决*：**全库一致性对齐（Reconciliation）**。新规则入库时主动与历史规则比对，自动标记直接矛盾或过时规则为 `SUPERSEDED`，动态维护记忆库的逻辑自洽。
+   - *解决*：**全库一致性对齐（Reconciliation）**。新规则入库时主动与历史规则比对；直接矛盾、显式 supersedes，以及“同标题/同类别且高重叠”的规程演进会被标记为 `SUPERSEDED`，而通用标题、低重叠与长标题截断差异会被保守保留，动态维护记忆库的逻辑自洽。
 
 ---
 
@@ -71,9 +71,16 @@ dsh-rsi (v0.1.0)
 1. **任务启动**：注入 E1-E6 认识论法则，同步挂载当前持久记忆库清单，Actor 使用 Code-as-Policy 编写和执行代码；
 2. **双盲验收**：产物完成后自动由 Verifier 开启无历史独立 Subagent，运行只读探针探测物理环境，执行疑点一票否决；
 3. **因果经验提炼**：Actor 复盘整条轨迹与审计反馈，抽取因果机理与避坑关键点；
-4. **冲突排查对齐**：Reconciler 遍历记忆库，利用 Jaccard 相似度与极性检测，自动为旧冲突规则打上 `SUPERSEDED` 标记；
+4. **冲突排查对齐**：Reconciler 遍历记忆库，按“完整未截断标题相等 + 非通用标题 + 同 category + Jaccard > 35%”识别同主题规程演进；极性矛盾或显式 supersedes 的旧规则打上 `SUPERSEDED`，通用标题、低重叠与长标题截断差异保守保留；
 5. **波次自探索（Phase 1）**：针对全新仓库，通过 `rsi_explore` 调度多波次并行探测，审计后批量入库；
 6. **失败驱动迭代（Phase 2）**：针对困难任务，通过 `rsi_practice` 跑通 `FAIL ➔ Distill ➔ Practice ➔ Retry`，隔离试验验证后重试。
+
+### 记忆身份与冲突治理（近期加固）
+
+- **内容寻址 ID**：`lessonToEntry` 对完整标题、category、语义 tags、preconditions、procedure、pitfall、evidence、verifyCommand 计算 SHA-256 前 10 位十六进制；`verdict`、`outcome-*`、`rsi-*`、`deprecated`、`superseded` 不参与身份，保证“失败 → 成功”重审原地更新。
+- **CJK / 标点 / 长标题**：`slugify` 与 `memoryFileName` 保留 Unicode 字母/数字；哈希覆盖完整标题与内容字段，标点差异或第 80 字符后的长标题差异不会互相覆盖。
+- **Windows 兼容**：`CON`、`PRN`、`AUX`、`NUL`、`COM1-9`、`LPT1-9` 等保留设备名自动加 `_` 前缀。
+- **同主题演进四重防护**：完整未截断标题相等、非通用默认标题、同 category、Jaccard > 35% 才判定为规程演进；否则保留双方或记为 `related_topic`，避免通用标题/低重叠/长标题截断误废弃。
 
 ---
 
@@ -118,11 +125,13 @@ dsh-rsi (v0.1.0)
 
 **适用场景**：稳定版交付、跨机器部署或分发归档。
 
-1. **打包归档为 `.tgz`**：
+1. **打包归档为 `.tgz`**（按 `package.json` 的 `files` 白名单显式收集，排除测试、`.git`、`node_modules` 与 `.DS_Store`）：
    ```bash
    rm -rf /tmp/dsh-rsi-pkg && mkdir -p /tmp/dsh-rsi-pkg/package
-   cp -R /Users/juheng/Documents/AgentProjects/dsh-rsi/* /tmp/dsh-rsi-pkg/package/
+   cp -R bin lib locale docs cordis.patch.yml dsh-plugin.json package.json icon.png LICENSE README.md README_ZH.md /tmp/dsh-rsi-pkg/package/
+   find /tmp/dsh-rsi-pkg -name '.DS_Store' -delete
    tar -czf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz -C /tmp/dsh-rsi-pkg package
+   tar -tzf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz | grep -c '.DS_Store'   # 期望输出 0
    ```
 2. **确认文件归档路径**：
    `~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz`
@@ -147,7 +156,7 @@ dsh-rsi (v0.1.0)
 
 ### 3. `rsi_reconcile_memory`（全局记忆对齐）
 - **功能**：检查记忆库中是否存在与新经验冲突或被演进取代的陈旧规则。
-- **机制**：支持同主题规程演进自动废弃旧版；跨规则高重叠通过反义极性分析检测直接矛盾并追加 `> ⚠️ SUPERSEDED / CONFLICT NOTICE` 注释（无矛盾则保留并建立 `related_topic` 关联），同时维护原始存储作用域。
+- **机制**：按“完整未截断标题相等、非通用标题、同 category、Jaccard > 35%”四重门槛识别同主题规程演进；跨规则高重叠通过反义极性分析检测直接矛盾；命中的旧规则追加 `> ⚠️ SUPERSEDED / CONFLICT NOTICE` 注释，否则保留并建立 `related_topic` 关联，同时维护原始存储作用域。
 
 ### 4. `rsi_query_memory`（检索持久记忆）
 - **功能**：提供关键词检索、标签筛选和分类查询，帮助 Agent 在新任务启动时按需调阅过往验证过的避坑指南。
@@ -233,7 +242,7 @@ ok 24 - VerifierRuntime probe safety checks
 ok 25 - VerifierRuntime runProbe execution
 ok 26 - VerifierRuntime parseReport handling and doubt enforcement
 1..26
-# tests 26 | pass 26 | fail 0 | duration ~95ms
+# tests 26 | pass 26 | fail 0 | duration ~115ms
 ```
 
 ---
@@ -290,6 +299,7 @@ dsh-rsi/
 - [x] **全流程部署指南与架构文档**：开发软链接、离线打包、图标切换及一键卸载支持。
 - [x] **Phase 1 并行探索工作流**：基于 DSH `workflow` API 实现新仓库并行波次探索（Broad Recursive Self-exploration）。
 - [x] **Phase 2 自动化迭代循环**：实现针对特定难点任务的失败驱动迭代（Deep Recursive Self-exploration），全自动跑通 `FAIL -> Distill -> Practice -> Retry` 状态机。
+- [x] **记忆身份与同主题演进防护**：内容寻址哈希（CJK/长标题/Windows 保留名）与四重 sameTopic 判定，支持重审原地更新并避免误废弃。
 
 ---
 

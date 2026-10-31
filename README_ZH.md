@@ -24,7 +24,7 @@
 | **Epistemic Core (E1-E6)** | `dsh-rsi:epistemic-core` Prompt Section | 硬编码认识论准则：以真实环境探针为准，严禁凭空猜测，错误信息即因果数据。 |
 | **Double-Blind Verifier** | `rsi_verify` 工具 + Subagent 独立无历史会话 | 隔绝 Actor 的私有思考与记忆，通过只读探针独立验证交付物是否真正达标。 |
 | **Memory Distillation** | `rsi_distill_memory` 工具 | 任务完成后提炼“条件-动作-避坑因果对”，而非流水账式记录。 |
-| **Memory Reconciliation** | `rsi_reconcile_memory` 工具 | 新经验入库时自动比对旧规则，消除直接矛盾，标注废弃规则，防止记忆污染。 |
+| **Memory Reconciliation** | `rsi_reconcile_memory` 工具 | 新经验入库时自动比对旧规则；四重门槛识别同主题规程演进，消除直接矛盾并标注废弃规则，防止记忆污染。 |
 | **Durable Memory Bank** | `~/.dsh/storages/rsi/` 与 `<workspace>/.rsi/` | 支持全局跨项目沉淀与项目本地沉淀，带 SHA-256 Tree Hash 完整性校验。 |
 | **Phase 1 Broad Exploration** | `rsi_explore` 工具 + DSH `workflow` API | 新环境/仓库并行波次探索（Survey ➔ Deep Probes ➔ 双盲复核入库）。 |
 | **Phase 2 Deep Practice** | `rsi_practice` 工具 + 失败驱动状态机 | 困难任务闭环状态机（FAIL ➔ Distill ➔ Practice ➔ Retry），试验验证后重试。 |
@@ -137,7 +137,7 @@ ok 24 - VerifierRuntime probe safety checks
 ok 25 - VerifierRuntime runProbe execution
 ok 26 - VerifierRuntime parseReport handling and doubt enforcement
 1..26
-# tests 26 | pass 26 | fail 0
+# tests 26 | pass 26 | fail 0 | duration ~115ms
 ```
 
 ---
@@ -186,7 +186,7 @@ ok 26 - VerifierRuntime parseReport handling and doubt enforcement
 2. **`rsi_distill_memory`**（因果经验提炼）：
    - 任务终态触发，提取前置条件、有效规程、踩坑机理三元组因果知识，结构化入库。
 3. **`rsi_reconcile_memory`**（全局记忆对齐）：
-   - 跨语料检测冲突与版本演进：同主题规程演进（同标题不同规程）或跨规则反义极性矛盾时自动将旧规则标记为 `SUPERSEDED`（无矛盾重叠作为 `related_topic` 保留），同时维护原始存储作用域。
+   - 跨语料检测冲突与版本演进：按“完整未截断标题相等、非通用标题、同 category、Jaccard > 35%”四重门槛识别同主题规程演进；跨规则反义极性矛盾同样触发 `SUPERSEDED`（无矛盾重叠作为 `related_topic` 保留），同时维护原始存储作用域。
 4. **`rsi_query_memory`**（检索持久记忆）：
    - 支持关键词、分类与标签检索，Agent 在任务启动时按需调阅避坑指南。
 5. **`rsi_explore`**（Phase 1 并行波次自探索）：
@@ -197,6 +197,12 @@ ok 26 - VerifierRuntime parseReport handling and doubt enforcement
    - 驱动困难任务跑通 `FAIL ➔ Distill ➔ Practice ➔ Retry` 状态机；
    - 每次失败后提炼假设，并在独立隔离环境中进行刻意练习（Practice）验证修正规程，再携新知识重试。
 
+### 记忆身份与冲突治理（近期加固）
+
+- **内容寻址 ID**：完整标题、category、语义 tags、preconditions、procedure、pitfall、evidence、verifyCommand 参与 SHA-256 前 10 位哈希；`verdict`、`outcome-*`、`rsi-*`、`deprecated`、`superseded` 不参与身份，保证失败 → 成功重审原地更新。
+- **CJK / 长标题 / Windows**：保留 Unicode 文件名，覆盖完整标题与内容字段；`CON`/`NUL` 等保留设备名自动加 `_` 前缀。
+- **同主题演进四重防护**：完整未截断标题相等、非通用标题、同 category、Jaccard > 35% 才判定演进；否则保留双方或记为 `related_topic`。
+
 ---
 
 ## 演进达成情况 (Roadmap)
@@ -206,6 +212,7 @@ ok 26 - VerifierRuntime parseReport handling and doubt enforcement
 - [x] **全流程部署指南与架构文档**：开发软链接、离线打包及宿主契约深度测试支持。
 - [x] **Phase 1 工作流**：基于 DSH `workflow` API 实现新仓库并行波次探索（Broad Recursive Self-exploration）。
 - [x] **Phase 2 自动化循环**：实现针对特定难点任务的失败驱动迭代（Deep Recursive Self-exploration），全自动跑通 `FAIL -> Distill -> Practice -> Retry` 状态机。
+- [x] **记忆身份与同主题演进防护**：内容寻址哈希（CJK/长标题/Windows 保留名）与四重 sameTopic 判定，支持重审原地更新并避免误废弃。
 
 ---
 
