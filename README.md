@@ -73,11 +73,22 @@ dsh-rsi (v0.1.0)
 
 整个自我进化生命周期遵循闭环流转：
 1. **任务启动**：注入 E1-E6 认识论法则，同步挂载当前持久记忆库清单，Actor 使用 Code-as-Policy 编写和执行代码；
-2. **双盲验收**：产物完成后自动由 Verifier 开启无历史独立 Subagent，运行只读探针探测物理环境，执行疑点一票否决；
+2. **双盲验收**：产物完成后，Agent 调用 `rsi_verify`；Verifier 开启无历史独立 Subagent，运行只读探针探测物理环境，执行疑点一票否决；
 3. **因果经验提炼**：Actor 复盘整条轨迹与审计反馈，抽取因果机理与避坑关键点；
 4. **冲突排查对齐**：Reconciler 遍历记忆库，按“完整未截断标题相等 + 非通用标题 + 同 category + Jaccard > 35%”识别同主题规程演进；极性矛盾或显式 supersedes 的旧规则打上 `SUPERSEDED`，通用标题、低重叠与长标题截断差异保守保留；
 5. **波次自探索（Phase 1）**：针对全新仓库，通过 `rsi_explore` 调度多波次并行探测，审计后批量入库；
 6. **失败驱动迭代（Phase 2）**：针对困难任务，通过 `rsi_practice` 跑通 `FAIL ➔ Distill ➔ Practice ➔ Retry`，隔离试验验证后重试。
+
+### RSI 工具调用协议（重要）
+
+DSH 只负责注入 Prompt Section 并注册工具，**不会在任务结束时自动执行验证或写入记忆**。要让引擎真正生效，Agent 必须显式调用：
+
+1. 任务前用 `rsi_query_memory` 检索相关经验；
+2. 宣称完成前用 `rsi_verify` 生成审计 Prompt，交给无历史独立 Subagent，回传 `report`；
+3. 裁决后用 `rsi_distill_memory` 并传入完整的 `rule_content`；**只传 objective/verdict 而不传 `rule_content` 不会写入任何文件**；
+4. 新仓库用 `rsi_explore`，反复失败的任务用 `rsi_practice`；冲突时用 `rsi_reconcile_memory`。
+
+该协议由 `dsh-rsi:rsi-protocol` Prompt Section（order 3120）在每个会话中注入。
 
 ### 记忆身份与冲突治理（近期加固）
 

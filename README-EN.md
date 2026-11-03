@@ -76,11 +76,22 @@ Each component can be enabled or disabled independently under DSH **Settings →
 The self-improvement lifecycle follows one closed loop:
 
 1. **Task start**: Inject E1-E6, mount the current durable-memory inventory, and let the actor write and execute code using Code-as-Policy.
-2. **Double-blind acceptance**: After the work is produced, the verifier starts a zero-history subagent, runs read-only physical probes, and applies a one-vote veto on unresolved doubts.
+2. **Double-blind acceptance**: After the work is produced, the agent calls `rsi_verify`; the verifier starts a zero-history subagent, runs read-only physical probes, and applies a one-vote veto on unresolved doubts.
 3. **Causal distillation**: The actor reviews the full trajectory and audit feedback, then extracts the causal mechanism and pitfalls.
 4. **Reconciliation**: The reconciler scans the bank and identifies same-topic procedure evolution using four gates: full untruncated title equality, non-generic title, matching category, and Jaccard overlap > 35%. Polarity contradictions or explicit supersedes also mark old rules `SUPERSEDED`; generic titles, low overlap, and long-title truncation differences are preserved.
 5. **Phase 1 broad exploration**: For an unfamiliar repository, `rsi_explore` runs parallel probe waves and commits audited lessons in bulk.
 6. **Phase 2 failure-driven iteration**: For a difficult task, `rsi_practice` drives the `FAIL ➔ Distill ➔ Practice ➔ Retry` loop, validates the corrective procedure in isolation, and retries with the new knowledge.
+
+### RSI Tool Protocol (Important)
+
+DSH only injects prompt sections and registers tools; **it does not run verification or write memory automatically at task end**. For the engine to take effect, the agent must explicitly call:
+
+1. `rsi_query_memory` before a nontrivial task to recall relevant lessons.
+2. `rsi_verify` before claiming the task is done; hand `verifier_system_prompt` to a zero-history independent subagent and pass its report back as `report`.
+3. `rsi_distill_memory` after the verdict with a complete `rule_content` block; **calling it with only the objective/verdict and no `rule_content` writes nothing**.
+4. `rsi_explore` for an unfamiliar repository, `rsi_practice` for a task that keeps failing, and `rsi_reconcile_memory` when rules conflict.
+
+This protocol is injected as the `dsh-rsi:rsi-protocol` prompt section (order 3120) in every session.
 
 ### Memory Identity and Conflict Governance (Recent Hardening)
 

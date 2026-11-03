@@ -60,8 +60,12 @@ test('DSH plugin lifecycle enforces strict host contracts (output, sync sections
   });
 
   assert.equal(COMPONENTS.length, 4);
-  assert.equal(sections.size, 2);
+  assert.equal(sections.size, 3);
   assert.deepEqual([...tools.keys()].sort(), [...RSI_TOOLS].sort());
+
+  const protocol = sections.get('dsh-rsi:rsi-protocol');
+  assert.match(protocol.text({}), /rsi_distill_memory/);
+  assert.match(protocol.text({}), /rule_content/);
 
   // Memory section text must be a synchronous string, never a Promise.
   const memSection = sections.get('dsh-rsi:memory-inventory');

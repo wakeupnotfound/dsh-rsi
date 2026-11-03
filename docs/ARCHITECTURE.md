@@ -65,6 +65,7 @@ As memory grows, agents risk preserving contradictory advice (e.g., one rule adv
           ├──> Mount Prompt Sections:
           │      - epistemic-core (E1-E6 rules, order 3100)
           │      - memory-inventory (scanned from ~/.dsh/storages/rsi and .rsi, order 3110)
+          │      - rsi-protocol (explicit recall/verify/distill/reconcile/explore/practice instructions, order 3120)
           │
           └──> Mount Tool Handlers:
                  - rsi_verify

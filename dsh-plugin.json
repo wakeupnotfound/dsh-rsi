@@ -58,6 +58,11 @@
         "name": "dsh-rsi:memory-inventory",
         "order": 3110,
         "summary": "Dynamic durable memory inventory from ~/.dsh/storages/rsi with causal guidelines"
+      },
+      {
+        "name": "dsh-rsi:rsi-protocol",
+        "order": 3120,
+        "summary": "Explicit protocol telling the agent when to recall, verify, distill, reconcile, explore, and practice with the RSI tools"
       }
     ],
     "x-tool-namespaces": [
