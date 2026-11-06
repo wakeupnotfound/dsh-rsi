@@ -190,6 +190,73 @@ The plugin registers six high-level tools that satisfy DSH's strict output-schem
 
 ---
 
+## Using dsh-rsi in a DSH Session
+
+> The engine is tool-driven: it does not run verification or write memory automatically at task end. The `RSI Engine Protocol` prompt section tells the agent when to call the tools; you can also state the requirement explicitly at task start:
+>
+> “Follow the RSI protocol: call `rsi_query_memory` first, `rsi_verify` before claiming done, and finally `rsi_distill_memory` with a complete `rule_content`.”
+
+### 1. Recall memory before a task
+
+Call `rsi_query_memory`:
+
+```json
+{"query": "sqlite busy timeout", "category": "environment"}
+```
+
+A result of `{"count":0,...}` only means there is no match yet; it does not indicate a broken plugin.
+
+### 2. Independent verification before completion
+
+Call `rsi_verify`:
+
+```json
+{
+  "task_objective": "Fix SQLite write-lock contention and keep the existing tests passing",
+  "deliverables": ["src/db.js"],
+  "probes": ["npm test", "git diff --stat"]
+}
+```
+
+Give the returned `verifier_system_prompt` to a zero-history independent subagent, then pass its report back through `report`:
+
+```json
+{"task_objective": "...", "report": "VERDICT: PASS\nDOUBTS: None\n..."}
+```
+
+### 3. Persist the lesson
+
+`rsi_distill_memory` requires `rule_content`:
+
+```json
+{
+  "task_objective": "Fix SQLite write-lock contention",
+  "verdict": "PASS",
+  "verifier_report": "VERDICT: PASS\nDOUBTS: None",
+  "trajectory_summary": "npm test passed; PRAGMA busy_timeout=5000 worked",
+  "rule_content": "---\nid: sqlite-busy-timeout\ntitle: \"Set busy_timeout before concurrent writes\"\ncategory: \"environment\"\ntags: [\"sqlite\"]\n---\n### Preconditions & Context\n...\n### Proven Rule / Recommended Action\n...\n### Pitfall / Failure Mechanism\n...\n### Evidence\n..."
+}
+```
+
+A successful call returns `status: "committed"` and `saved_path`. Calling it with only the objective/verdict and no `rule_content` returns `status: "prompt_generated"` and writes nothing.
+
+### 4. Verify that it worked
+
+```bash
+find .rsi/memory -name '*.md'
+node bin/rsi.mjs status
+```
+
+If no files appear, check that DSH was restarted, the system prompt contains `RSI Engine Protocol`, the agent actually called `rsi_distill_memory` with `rule_content`, and whether the scope is workspace or global.
+
+### 5. Other cases
+
+- `rsi_reconcile_memory`: align conflicts or same-topic procedure evolution;
+- `rsi_explore`: parallel-wave exploration of a new repository/environment;
+- `rsi_practice`: FAIL ➔ Distill ➔ Practice ➔ Retry for a difficult task.
+
+---
+
 ## Quick Start and CLI
 
 In addition to running as a DSH plugin in the background, `dsh-rsi` provides a standalone terminal CLI named `rsi`:

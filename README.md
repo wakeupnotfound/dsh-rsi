@@ -187,6 +187,73 @@ DSH 只负责注入 Prompt Section 并注册工具，**不会在任务结束时�
 
 ---
 
+## 在 DSH 会话中使用（典型流程）
+
+> 插件是工具驱动的，不会在任务结束时自动执行验证或写入记忆。系统提示中的 `RSI Engine Protocol` 会指导 Agent 调用；你也可以在任务开始时明确要求：
+>
+> “请按 RSI 协议执行：先 `rsi_query_memory`，完成前 `rsi_verify`，最后用 `rsi_distill_memory` 传入完整 `rule_content`。”
+
+### 1. 任务前检索记忆
+
+调用 `rsi_query_memory`：
+
+```json
+{"query": "sqlite busy timeout", "category": "environment"}
+```
+
+返回 `{"count":0,...}` 只表示当前没有匹配，不是插件故障。
+
+### 2. 完成前独立验收
+
+调用 `rsi_verify`：
+
+```json
+{
+  "task_objective": "修复 SQLite 并发写入锁冲突，并保持现有测试通过",
+  "deliverables": ["src/db.js"],
+  "probes": ["npm test", "git diff --stat"]
+}
+```
+
+把返回的 `verifier_system_prompt` 交给一个无历史独立 Subagent；将其报告通过 `report` 回传：
+
+```json
+{"task_objective": "...", "report": "VERDICT: PASS\nDOUBTS: None\n..."}
+```
+
+### 3. 写入持久记忆
+
+`rsi_distill_memory` 必须带 `rule_content`：
+
+```json
+{
+  "task_objective": "修复 SQLite 并发写入锁冲突",
+  "verdict": "PASS",
+  "verifier_report": "VERDICT: PASS\nDOUBTS: None",
+  "trajectory_summary": "npm test 通过；PRAGMA busy_timeout=5000 生效",
+  "rule_content": "---\nid: sqlite-busy-timeout\ntitle: \"Set busy_timeout before concurrent writes\"\ncategory: \"environment\"\ntags: [\"sqlite\"]\n---\n### Preconditions & Context\n...\n### Proven Rule / Recommended Action\n...\n### Pitfall / Failure Mechanism\n...\n### Evidence\n..."
+}
+```
+
+成功后返回 `status: "committed"` 与 `saved_path`。若只传 objective/verdict 而不传 `rule_content`，返回 `status: "prompt_generated"`，**不会写入任何文件**。
+
+### 4. 检查是否生效
+
+```bash
+find .rsi/memory -name '*.md'
+node bin/rsi.mjs status
+```
+
+如果没有文件：确认已重启 DSH、系统提示包含 `RSI Engine Protocol`、Agent 确实调用了 `rsi_distill_memory` 且带 `rule_content`、以及 scope 是 workspace 还是 global。
+
+### 5. 其他场景
+
+- `rsi_reconcile_memory`：新规则与旧规则冲突或同主题演进时对齐；
+- `rsi_explore`：新仓库/新环境的并行波次探索；
+- `rsi_practice`：困难任务的 FAIL ➔ Distill ➔ Practice ➔ Retry 循环。
+
+---
+
 ## 快速体验与 CLI 使用
 
 除了作为 DSH 插件在后台无感运行外，`dsh-rsi` 提供了独立的终端 CLI 工具 `rsi`：
