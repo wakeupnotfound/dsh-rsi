@@ -158,6 +158,40 @@ This protocol is injected as the `dsh-rsi:rsi-protocol` prompt section (order 31
 
 ---
 
+### Option 3: Install via GitHub Packages or Release Archive
+
+**Use case**: install directly with a package manager from [GitHub Packages (`@wakeupnotfound/dsh-rsi`)](https://github.com/wakeupnotfound/dsh-rsi/pkgs/npm/dsh-rsi) or [GitHub Releases](https://github.com/wakeupnotfound/dsh-rsi/releases) without cloning the repository.
+
+#### A. Install from GitHub Packages (npm Registry)
+
+1. **Configure the `@wakeupnotfound` scope registry** (one-time setup; requires a GitHub token with `read:packages`):
+   ```bash
+   npm config set @wakeupnotfound:registry https://npm.pkg.github.com
+   npm config set //npm.pkg.github.com/:_authToken <YOUR_GITHUB_TOKEN>
+   ```
+2. **Install into the DSH desktop profile (or globally for the CLI)**:
+   ```bash
+   # Install into the DSH desktop profile (use an npm alias so the package resolves as dsh-rsi)
+   cd ~/.dsh/profiles/desktop && npm install dsh-rsi@npm:@wakeupnotfound/dsh-rsi@0.2.0
+
+   # Or install the standalone `rsi` CLI globally (includes `rsi install-skill`)
+   npm install -g @wakeupnotfound/dsh-rsi@0.2.0
+   ```
+
+#### B. Install Directly from the GitHub Release `.tgz` (No Token Required)
+
+```bash
+# 1. Download into the DSH plugin-packages directory
+mkdir -p ~/.dsh/plugin-packages
+curl -fL https://github.com/wakeupnotfound/dsh-rsi/releases/download/v0.2.0/dsh-rsi-0.2.0.tgz \
+  -o ~/.dsh/plugin-packages/dsh-rsi-0.2.0.tgz
+
+# 2. Or install the CLI / package directly via npm
+npm install -g https://github.com/wakeupnotfound/dsh-rsi/releases/download/v0.2.0/dsh-rsi-0.2.0.tgz
+```
+
+---
+
 ## 🛠 Six DSH Tools
 
 The plugin registers six high-level tools that satisfy DSH's strict output-schema and lossless-JSON contracts.

@@ -155,6 +155,42 @@ DSH 只负责注入 Prompt Section 并注册工具，**不会在任务结束时�
 
 ---
 
+### 方式三：通过 GitHub Packages / Release 归档安装
+
+**适用场景**：无需克隆源码，直接通过包管理器从 [GitHub Packages (`@wakeupnotfound/dsh-rsi`)](https://github.com/wakeupnotfound/dsh-rsi/pkgs/npm/dsh-rsi) 或 [GitHub Releases](https://github.com/wakeupnotfound/dsh-rsi/releases) 安装。
+
+#### A. 从 GitHub Packages (npm Registry) 安装
+
+1. **配置 `@wakeupnotfound` 作用域的 Registry**（首次配置，需要具备 `read:packages` 权限的 GitHub Token）：
+   ```bash
+   npm config set @wakeupnotfound:registry https://npm.pkg.github.com
+   npm config set //npm.pkg.github.com/:_authToken <YOUR_GITHUB_TOKEN>
+   ```
+2. **安装到 DSH 桌面 Profile（或全局 CLI）**：
+   ```bash
+   # 作为 DSH 插件安装到 desktop profile（使用 npm alias 保持插件包名为 dsh-rsi）
+   cd ~/.dsh/profiles/desktop && npm install dsh-rsi@npm:@wakeupnotfound/dsh-rsi@0.2.0
+
+   # 或全局安装 CLI 工具（提供 `rsi` 命令与 `rsi install-skill`）
+   npm install -g @wakeupnotfound/dsh-rsi@0.2.0
+   ```
+
+#### B. 从 GitHub Release 直接下载免鉴权 `.tgz` 归档安装
+
+无需配置 GitHub Token，直接安装 Release 构建包：
+
+```bash
+# 1. 下载到 DSH 插件归档目录
+mkdir -p ~/.dsh/plugin-packages
+curl -fL https://github.com/wakeupnotfound/dsh-rsi/releases/download/v0.2.0/dsh-rsi-0.2.0.tgz \
+  -o ~/.dsh/plugin-packages/dsh-rsi-0.2.0.tgz
+
+# 2. 或直接用 npm 全局安装 CLI / 安装到指定目录
+npm install -g https://github.com/wakeupnotfound/dsh-rsi/releases/download/v0.2.0/dsh-rsi-0.2.0.tgz
+```
+
+---
+
 ## 🛠 注册的 6 大 DSH Tools
 
 插件向 DSH 注册了 6 个高阶工具，满足 DSH strict output schema 与 lossless JSON 契约：
