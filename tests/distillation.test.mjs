@@ -43,4 +43,19 @@ Exporting without recomputing leaves the geometric shape unmeshed or empty.
   assert.equal(parsed.category, 'tool-pitfall');
   assert.deepEqual(parsed.tags, ['freecad', 'cad', 'python']);
   assert.match(parsed.content, /doc\.recompute\(\)/);
+
+  // Test supersedes field parsing and slug normalization
+  const supersedesMd = `
+---
+id: "rule-v2"
+title: "Rule v2"
+category: "workflow"
+tags: ["build"]
+supersedes: ["rule-v1", "old_rule"]
+---
+### Preconditions & Context
+All builds.
+`;
+  const parsedV2 = distiller.parseDistilledEntry(supersedesMd);
+  assert.deepEqual(parsedV2.supersedes, ['rule-v1', 'old_rule']);
 });

@@ -29,12 +29,29 @@ test('VerifierRuntime probe safety checks', () => {
   assert.equal(verifier.isProbeSafe('rsync -a src/ dest/'), false);
   assert.equal(verifier.isProbeSafe('tar -xzf pkg.tgz'), false);
   assert.equal(verifier.isProbeSafe('unzip archive.zip'), false);
-  // Benign reads, inspects, and JS arrows stay allowed
+  // Benign reads and inspects stay allowed
   assert.equal(verifier.isProbeSafe('tar -tzf pkg.tgz'), true);
   assert.equal(verifier.isProbeSafe('python3 --version'), true);
   assert.equal(verifier.isProbeSafe('npm test 2>&1'), true);
   assert.equal(verifier.isProbeSafe('ls >/dev/null 2>&1'), true);
-  assert.equal(verifier.isProbeSafe('node -e "[1].map(x => x)"'), true);
+  assert.equal(verifier.isProbeSafe('node --check lib/index.js'), true);
+  assert.equal(verifier.isProbeSafe('node --test tests/verifier.test.mjs'), true);
+  assert.equal(verifier.isProbeSafe('rg -n "x => x" lib/'), true);
+
+  // Arbitrary inline code evaluation (`node -e`, `python -c`), shell chaining, and bypasses are blocked
+  assert.equal(verifier.isProbeSafe('node -e "[1].map(x => x)"'), false);
+  assert.equal(verifier.isProbeSafe('bash -c "r""m -rf x"'), false);
+  assert.equal(verifier.isProbeSafe('python3 -c "__import__(\'os\').system(\'id\')"'), false);
+  assert.equal(verifier.isProbeSafe('perl -e "unlink q(x)"'), false);
+  assert.equal(verifier.isProbeSafe('curl -o out.txt http://example.com'), false);
+  assert.equal(verifier.isProbeSafe('git config core.hooksPath /tmp'), false);
+  assert.equal(verifier.isProbeSafe('npm run build'), false);
+  assert.equal(verifier.isProbeSafe('make clean'), false);
+  assert.equal(verifier.isProbeSafe('git branch evil'), false);
+  assert.equal(verifier.isProbeSafe('/bin/rm x'), false);
+  assert.equal(verifier.isProbeSafe('cat x | sh'), false);
+  assert.equal(verifier.isProbeSafe('eval "rm x"'), false);
+  assert.equal(verifier.isProbeSafe('ls; rm -rf /'), false);
 });
 
 test('VerifierRuntime runProbe execution', async () => {

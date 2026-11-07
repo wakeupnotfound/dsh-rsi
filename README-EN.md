@@ -165,12 +165,14 @@ The plugin registers six high-level tools that satisfy DSH's strict output-schem
 ### 1. `rsi_verify` (Independent Double-Blind Verification)
 - **Purpose**: Run a read-only, independent probe audit against the current task's deliverables.
 - **Mechanism**:
-  - Applies a heuristic static filter to common destructive commands (e.g. `rm`, `git reset --hard`, `sed -i`, file redirection, code writes, and package changes), complementing the DSH read-only process sandbox with defense in depth.
+  - **Shell-free allowlist execution (`ProbePolicy`)**: Probe commands are tokenized into `argv` without a shell (rejecting pipes, redirection, chaining, and command substitution) and checked against an explicit allowlist of read-only inspection tools and test runners before running via `spawn(..., { shell: false })`.
+  - **Cryptographic `verification_receipt`**: Parsing an audit report issues an HMAC-signed receipt so `rsi_distill_memory` can verify that the verdict came from `rsi_verify` rather than self-reporting.
   - Enforces the **Doubt Invariant**: a missing or blank `DOUBTS` section (E4: silence proves nothing) or any unresolved doubt downgrades even a `PASS` to `FAIL`.
 
 ### 2. `rsi_distill_memory` (Causal Experience Distillation)
 - **Purpose**: After a task, distill reusable causal rules from the verifier outcome and execution trajectory.
-- **Output**: Structured Markdown with YAML frontmatter (id, tags, category, verification marker) and four sections: Preconditions, Recommended Procedure, Failure Mechanism, and Evidence.
+- **Mechanism**: Verifies `verification_receipt`, supports explicit `supersedes` lists, and signs written entries with a per-user HMAC key (`~/.dsh/storages/rsi/.integrity-key`). Unsigned workspace entries inside cloned repositories are quarantined and never injected into the system prompt (until explicitly approved via `rsi trust <id>`).
+- **Output**: Structured Markdown with YAML frontmatter (id, tags, category, verification marker, signature) and four sections: Preconditions, Recommended Procedure, Failure Mechanism, and Evidence.
 
 ### 3. `rsi_reconcile_memory` (Global Memory Alignment)
 - **Purpose**: Detect stale rules that conflict with, or have been superseded by, new experience.
@@ -412,8 +414,10 @@ dsh-rsi/
 │   │   └── explorer/            # Recursive exploration and practice
 │   ├── core/                    # Algorithm core
 │   │   ├── epistemic.js         # E1-E6 axioms and prompt renderer
-│   │   ├── verifier.js          # Double-blind verifier and read-only probe guard
-│   │   ├── memory.js            # Memory CRUD, tree hash, dual-scope handling
+│   │   ├── probe-policy.js      # Shell-free read-only probe tokenizer and allowlist
+│   │   ├── integrity.js         # HMAC keyring and verification receipt attestation
+│   │   ├── verifier.js          # Double-blind verifier and read-only probe runner
+│   │   ├── memory.js            # Memory CRUD, signature trust, file locks, dual-scope handling
 │   │   ├── distillation.js      # Causal distillation prompt and parser
 │   │   ├── reconciliation.js    # Consistency checks and supersession
 │   │   ├── exploration.js       # Phase 1 parallel exploration and audit

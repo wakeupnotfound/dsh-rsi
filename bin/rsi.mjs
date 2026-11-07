@@ -35,10 +35,26 @@ async function main() {
       const all = await bank.listAll();
       console.log(`\n=== Durable Memory Entries (${all.length}) ===`);
       for (const entry of all) {
+        const trustBadge = entry.trusted ? 'trusted' : '⚠️ UNTRUSTED (unsigned)';
         console.log(`- [${entry.id}] (${entry.category || 'general'}) ${entry.title}`);
         if (entry.tags?.length) console.log(`  Tags: ${entry.tags.join(', ')}`);
-        console.log(`  Scope: ${entry.scope} | Size: ${entry.size}B | Path: ${entry.filePath}`);
+        console.log(`  Scope: ${entry.scope} | Trust: ${trustBadge} | Size: ${entry.size}B | Path: ${entry.filePath}`);
       }
+      break;
+    }
+
+    case 'trust': {
+      const id = args[0];
+      if (!id) {
+        console.error('Usage: rsi trust <entry-id>');
+        process.exit(1);
+      }
+      const res = await bank.trust(id);
+      if (!res) {
+        console.error(`Entry "${id}" not found.`);
+        process.exit(1);
+      }
+      console.log(`✅ Trusted and signed entry [${id}] at ${res.path}`);
       break;
     }
 
@@ -126,7 +142,8 @@ RSIAgent (DSH) — Recursive Self-Improvement CLI Tool
 
 Usage:
   rsi status              Show memory bank directory, entry count, and tree hash
-  rsi list                List all active memory entries
+  rsi list                List all active memory entries (and trust status)
+  rsi trust <id>          Sign and trust an unsigned workspace memory entry
   rsi query <text>        Search memory bank for procedures and pitfalls
   rsi verify <objective>  Generate independent verifier audit prompt
   rsi prompt              Inspect injected Epistemic Core and memory inventory

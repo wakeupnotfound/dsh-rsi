@@ -162,12 +162,14 @@ DSH 只负责注入 Prompt Section 并注册工具，**不会在任务结束时�
 ### 1. `rsi_verify`（独立双盲验证）
 - **功能**：对当前任务的交付物执行只读独立探针审计。
 - **机制**：
-  - 启发式静态拦截常见破坏性指令（如 `rm`, `git reset --hard`, `sed -i`, 文件重定向、代码写入、包管理变更等），与 DSH 只读进程沙箱配合实现纵深防御；
+  - **无 Shell 白名单执行（`ProbePolicy`）**：探针指令被直接词法解析为 `argv` 并通过 `spawn(..., { shell: false })` 执行，严禁管道、重定向、命令拼接与子命令替换，仅放行白名单内的只读检视工具与测试运行器；
+  - **加密核验凭据（`verification_receipt`）**：解析盲审报告后签发 HMAC 凭据，供 `rsi_distill_memory` 验证真伪，防止模型伪造 `verified: true`；
   - 严格执行 **Doubt Invariant**：若报告缺失明确的 DOUBTS 段落（E4 沉默不代表没有），或包含未消除存疑，即使标有 PASS 也强制降级为 FAIL。
 
 ### 2. `rsi_distill_memory`（因果经验提炼）
 - **功能**：在任务完成后，基于验证器的成败报告与执行轨迹提炼可复用的因果规则。
-- **产物**：包含 YAML Frontmatter（ID、标签、分类、验证标记）以及「前置条件 / 推荐规程 / 避坑机理 / 证据」四段式的结构化 Markdown。
+- **机制**：支持 `verification_receipt` 凭据核验与 `supersedes` 显式取代列表；写入磁盘的记忆文件均附带用户级密钥（`~/.dsh/storages/rsi/.integrity-key`）HMAC 签名，克隆第三方仓库中未签名的 `.rsi/memory/` 文件将被隔离且绝不注入系统提示词（可通过 `rsi trust <id>` 手动审核信任）。
+- **产物**：包含 YAML Frontmatter（ID、标签、分类、验证标记、签名）以及「前置条件 / 推荐规程 / 避坑机理 / 证据」四段式的结构化 Markdown。
 
 ### 3. `rsi_reconcile_memory`（全局记忆对齐）
 - **功能**：检查记忆库中是否存在与新经验冲突或被演进取代的陈旧规则。
@@ -409,8 +411,10 @@ dsh-rsi/
 │   │   └── explorer/            # 递归自探索与练习组件
 │   ├── core/                    # 算法核心层
 │   │   ├── epistemic.js         # E1-E6 认识论公理及系统提示词渲染器
-│   │   ├── verifier.js          # 独立双盲验收引擎与只读探针安全拦截器
-│   │   ├── memory.js            # 记忆库读写、Tree Hash 计算与双作用域管理
+│   │   ├── probe-policy.js      # 无 Shell 只读探针词法解析与白名单策略
+│   │   ├── integrity.js         # HMAC 签名密钥环与验证凭据 (Receipt) 校验
+│   │   ├── verifier.js          # 独立双盲验收引擎与只读探针执行器
+│   │   ├── memory.js            # 记忆库读写、签名校验、文件锁与双作用域管理
 │   │   ├── distillation.js      # 因果规则提炼与结构化解析器
 │   │   ├── reconciliation.js    # 语料库一致性排查与废弃标注器
 │   │   ├── exploration.js       # Phase 1 并行波次探索与独立审计

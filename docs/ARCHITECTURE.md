@@ -29,8 +29,9 @@ A major finding in agent failure audits is **semantic entanglement**: when an ac
 ### The Double-Blind Solution
 In `dsh-rsi`, verification strictly adheres to:
 1. **Zero-History Context**: The Verifier never receives the Actor's reasoning traces, self-checks, or scratchpad.
-2. **Read-Only Discipline**: Probes are filtered through `isProbeSafe()` as a heuristic defense-in-depth layer against common accidental mutations (deletions, writes, in-place edits, installations), complementing DSH filesystem sandboxing.
-3. **Doubt Invariant**: `VERDICT: PASS` requires an explicit, affirmative attestation in `DOUBTS:` (e.g., `None` or `无`). Any unresolved material doubt triggers an automatic downgrade to `FAIL`. Following Epistemic axiom E4 (*Silence proves nothing*), an omitted or blank `DOUBTS:` section is treated as absence of proof and automatically downgraded to `FAIL`.
+2. **Read-Only Discipline & Shell-Free Allowlist**: Probes are tokenized into `argv` without a shell (rejecting pipes, redirection, command chaining, and command substitution) and checked against an explicit program and argument allowlist (`ProbePolicy` in `probe-policy.js`) before execution via `spawn(..., { shell: false })`.
+3. **Cryptographic Verification Receipts & Workspace Trust**: When `rsi_verify` parses an audit report, it issues an HMAC-signed `verification_receipt` (`integrity.js`). `rsi_distill_memory` marks a lesson as `verified: true` only when presented with a valid receipt. Furthermore, workspace memory files written by the plugin are HMAC-signed with a per-user secret stored outside the repository (`~/.dsh/storages/rsi/.integrity-key`); unsigned files in a cloned repository's `.rsi/memory/` are treated as untrusted and excluded from system-prompt injection and default queries.
+4. **Doubt Invariant**: `VERDICT: PASS` requires an explicit, affirmative attestation in `DOUBTS:` (e.g., `None` or `无`). Any unresolved material doubt triggers an automatic downgrade to `FAIL`. Following Epistemic axiom E4 (*Silence proves nothing*), an omitted or blank `DOUBTS:` section is treated as absence of proof and automatically downgraded to `FAIL`.
 
 ---
 

@@ -89,7 +89,7 @@ test('lessonToEntry and MemoryBank preserve distinct CJK titles without collisio
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-cjk-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
 
-  const bank = new MemoryBank({ workspaceDir: tmpDir });
+  const bank = new MemoryBank({ workspaceDir: tmpDir, globalDir: path.join(tmpDir, 'global') });
   await bank.init();
 
   const e1 = lessonToEntry({ title: '中文规则甲', category: 'workflow', preconditions: 'p1', procedure: 'do甲', pitfall: 'pf1', evidence: 'ev1' });

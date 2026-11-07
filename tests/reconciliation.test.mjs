@@ -8,7 +8,7 @@ import { MemoryReconciler } from '../lib/core/reconciliation.js';
 
 test('MemoryReconciler contradiction detection and resolution', async (t) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-recon-'));
-  const bank = new MemoryBank({ workspaceDir: tempDir });
+  const bank = new MemoryBank({ workspaceDir: tempDir, globalDir: path.join(tempDir, 'global') });
   const reconciler = new MemoryReconciler();
 
   t.after(async () => {
@@ -48,7 +48,7 @@ test('MemoryReconciler contradiction detection and resolution', async (t) => {
 
 test('MemoryReconciler supersedes old entry when same lesson topic procedure evolves', async (t) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-recon-topic-'));
-  const bank = new MemoryBank({ workspaceDir: tempDir });
+  const bank = new MemoryBank({ workspaceDir: tempDir, globalDir: path.join(tempDir, 'global') });
   const reconciler = new MemoryReconciler();
 
   t.after(async () => {
@@ -94,7 +94,7 @@ test('MemoryReconciler supersedes old entry when same lesson topic procedure evo
 
 test('MemoryReconciler avoids false-positive supersession on generic titles, low overlap, or truncated long titles', async (t) => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-recon-guards-'));
-  const bank = new MemoryBank({ workspaceDir: tempDir });
+  const bank = new MemoryBank({ workspaceDir: tempDir, globalDir: path.join(tempDir, 'global') });
   const reconciler = new MemoryReconciler();
 
   t.after(async () => {

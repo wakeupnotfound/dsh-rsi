@@ -239,3 +239,50 @@ test('rsi_explore and rsi_practice execute via workflowEngine and commit only au
   const queried = await tools.get('rsi_query_memory').execute({ query: '' }, exec);
   assert.equal(queried.count, 4);
 });
+
+test('rsi_verify issues cryptographic receipt and rsi_distill_memory enforces receipt attestation', async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-receipt-'));
+  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+
+  const tools = new Map();
+  const mockCtx = {
+    systemPrompt: { section: () => () => {} },
+    tools: { register: (def) => { tools.set(def.name, def); return () => {}; } },
+    effect: (fn) => fn()
+  };
+
+  apply({ inject: (_d, cb) => cb(mockCtx) }, {
+    workspaceDir: tmpDir,
+    globalMemoryDir: path.join(tmpDir, 'global')
+  });
+
+  // 1. Distill without receipt -> stored as self-reported (verified: false)
+  const unverifiedRes = await tools.get('rsi_distill_memory').execute({
+    task_objective: 'Test receipt enforcement',
+    verdict: 'PASS',
+    verifier_report: 'VERDICT: PASS\nDOUBTS: None',
+    rule_content: '---\nid: self-reported-rule\ntitle: "Self reported"\ncategory: "workflow"\ntags: ["t"]\n---\nBody'
+  }, {});
+  assert.equal(unverifiedRes.status, 'committed');
+  assert.equal(unverifiedRes.verified, false, 'Without verification_receipt, lesson must not be marked verified');
+
+  // 2. Parse report via rsi_verify -> obtain cryptographic receipt -> distill with receipt -> verified: true
+  const auditReport = '# Audit\nAll checks passed.\nDOUBTS: None\nVERDICT: PASS';
+  const verifyRes = await tools.get('rsi_verify').execute({
+    task_objective: 'Test receipt enforcement',
+    report: auditReport
+  }, {});
+  assert.equal(verifyRes.status, 'verdict_parsed');
+  assert.equal(verifyRes.verdict, 'PASS');
+  assert.ok(verifyRes.verification_receipt, 'rsi_verify must issue a verification_receipt');
+
+  const verifiedRes = await tools.get('rsi_distill_memory').execute({
+    task_objective: 'Test receipt enforcement',
+    verdict: 'PASS',
+    verifier_report: auditReport,
+    verification_receipt: verifyRes.verification_receipt,
+    rule_content: '---\nid: attested-rule\ntitle: "Attested rule"\ncategory: "workflow"\ntags: ["t"]\n---\nBody'
+  }, {});
+  assert.equal(verifiedRes.status, 'committed');
+  assert.equal(verifiedRes.verified, true, 'With valid verification_receipt, lesson must be marked verified');
+});
