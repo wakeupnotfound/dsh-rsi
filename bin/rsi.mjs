@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+
 import {
   MemoryBank,
   VerifierRuntime,
@@ -81,6 +86,31 @@ async function main() {
       break;
     }
 
+    case 'skill':
+    case 'install-skill': {
+      const __dirname = path.dirname(fileURLToPath(import.meta.url));
+      const srcDir = path.resolve(__dirname, '..', 'skills', 'rsi');
+      const targetDir = path.join(os.homedir(), '.agents', 'skills', 'rsi');
+      if (args[0] === '--print' || args[0] === '-p') {
+        const skillPath = path.join(srcDir, 'SKILL.md');
+        if (fs.existsSync(skillPath)) {
+          console.log(fs.readFileSync(skillPath, 'utf8'));
+        } else {
+          console.error('SKILL.md not found at ' + skillPath);
+        }
+        break;
+      }
+      try {
+        fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+        fs.cpSync(srcDir, targetDir, { recursive: true });
+        console.log(`✅ RSI Skill successfully installed to: ${targetDir}`);
+      } catch (err) {
+        console.error(`Failed to install skill to ${targetDir}: ${err.message}`);
+        console.log(`Skill source available at: ${srcDir}`);
+      }
+      break;
+    }
+
     case 'prompt': {
       console.log('=== Rendered Epistemic Core ===\n');
       console.log(renderEpistemicSection());
@@ -100,6 +130,7 @@ Usage:
   rsi query <text>        Search memory bank for procedures and pitfalls
   rsi verify <objective>  Generate independent verifier audit prompt
   rsi prompt              Inspect injected Epistemic Core and memory inventory
+  rsi skill               Install the built-in RSI skill to ~/.agents/skills/rsi (or --print)
   rsi explore [objective] Emit the Phase 1 broad-exploration workflow request (JSON)
   rsi practice <task>     Emit the Phase 2 FAIL->Distill->Practice->Retry workflow request (JSON)
 `);

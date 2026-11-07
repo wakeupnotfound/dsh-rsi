@@ -285,6 +285,71 @@ node bin/rsi.mjs practice "解决 SQLite 高并发写入锁冲突"
 
 ---
 
+
+---
+
+## 📦 RSIAgent 官方 Skill 沉淀（Agent Skill Specification）
+
+除了作为 DSH 底层插件运行时，本项目已将 RSIAgent 的核心认知准则、认识论信道纪律、独立双盲盲审及因果提炼 SOP **完整沉淀为标准 Agent Skill 资产**，存放在 `skills/rsi/`：
+
+```
+skills/rsi/
+├── SKILL.md                          # 遵循标准规范的 Skill 主入口（带 YAML frontmatter & 4 大硬门禁）
+├── _meta.json                        # Skill 元数据（版本、作者、许可证）
+└── references/
+    ├── epistemic-core.md             # E1-E6 认识论六大准则操作手册（真理信道、结构与渲染分离等）
+    ├── double-blind-verification.md  # 零历史独立盲审子智能体、安全探针与疑点不变量协议
+    ├── causal-distillation.md        # 四段式因果规则提炼规范（前置条件+有效规程+避坑机理+证据）
+    └── exploration-and-practice.md   # 仓库并行自探索与失败驱动刻意练习状态机
+```
+
+### 1. 安装方式
+
+#### 方式 A：通过 CLI 一键安装至全局 Agent Skills（推荐）
+```bash
+cd /Users/juheng/Documents/AgentProjects/dsh-rsi
+
+# 一键安装到全局技能目录 ~/.agents/skills/rsi
+node bin/rsi.mjs install-skill
+```
+
+#### 方式 B：手动建立软链接（实时同步最新改动）
+```bash
+mkdir -p ~/.agents/skills
+ln -s "$(pwd)/skills/rsi" ~/.agents/skills/rsi
+```
+
+#### 方式 C：单项目/仓库私有启用
+若只想在特定项目中生效，直接将 `skills/rsi` 复制到该项目的 `.agents/skills/rsi` 或 `.cursor/skills-cursor/rsi` 目录下即可。
+
+---
+
+### 2. 使用方法与工作流
+
+安装后，在任何支持 Agent Skills 的环境（DeepSeek Harness、Claude Code、Cursor、OpenClaw 等）中均可无缝使用：
+
+#### 触发调用
+- **自然语言触发**：
+  > “请严格按照 RSI 规范执行此任务，先检索经验，完成前执行独立双盲验证，绝不要自欺欺人。”
+  > “帮我探索这个陌生仓库，遵循 RSI 探索工作流。”
+- **显式载入 Skill**：
+  在 Prompt 中指定 `skill: rsi` 或 `/rsi` 即可强行激活整套改进闭环。
+
+#### 运行模态（自动适配环境）
+1. **DSH 原生插件环境**：
+   Agent 会自动调度 `rsi_query_memory`、`rsi_verify`、`rsi_distill_memory` 等原生工具，享受安全沙箱防御与跨会话自动化持久记忆库。
+2. **纯通用 Agent 环境（降级兼容）**：
+   无需安装任何插件！Skill 内置完备的 SOP 协议，会指导通用 Agent：
+   - 使用只读探针测试代码；
+   - 派发一个**全新的零历史空白子智能体（Subagent）**执行盲审验收，杜绝“自我推演合理即宣布完成”的虚假自恰（False-Done）；
+   - 在项目根目录的 `.rsi/memory/` 中自动生成规范的四段式因果规则 Markdown 文件。
+
+#### CLI 辅助命令
+```bash
+# 打印 Skill 完整指令内容
+node bin/rsi.mjs skill --print
+```
+
 ## 自动化测试套件
 
 项目采用 Node.js 原生测试运行器（`node:test`），零外部测试框架依赖，极速稳定：

@@ -35,7 +35,8 @@
     "./explorer/package.json": "./lib/components/explorer/package.json",
     "./explorer/locale/*.json": "./lib/components/explorer/locale/*.json",
     "./core": "./lib/core/index.js",
-    "./tools": "./lib/tools/definitions.js"
+    "./tools": "./lib/tools/definitions.js",
+    "./skills/*": "./skills/*"
   },
   "dsh": {
     "bundle": {
@@ -81,6 +82,7 @@
     "LICENSE",
     "README.md",
     "README-EN.md",
-    "docs"
+    "docs",
+    "skills"
   ]
 }

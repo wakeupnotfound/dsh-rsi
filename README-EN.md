@@ -288,6 +288,71 @@ node bin/rsi.mjs practice "Resolve SQLite write-lock contention under high concu
 
 ---
 
+
+---
+
+## 📦 Official RSIAgent Skill Asset
+
+In addition to serving as a native DSH runtime plugin, the core cognitive principles, epistemic truth channels, double-blind audit protocols, and causal distillation workflows have been **crystallized into a standard Agent Skill asset** under `skills/rsi/`:
+
+```
+skills/rsi/
+├── SKILL.md                          # Standard Skill entrypoint with YAML frontmatter & 4 Hard Gates
+├── _meta.json                        # Skill metadata (version, license, slug)
+└── references/
+    ├── epistemic-core.md             # E1-E6 Epistemic axioms operational reference
+    ├── double-blind-verification.md  # Zero-history subagent verification & probe safety rules
+    ├── causal-distillation.md        # 4-section causal rule drafting guide
+    └── exploration-and-practice.md   # Autonomous exploration & deliberate practice state machine
+```
+
+### 1. Installation
+
+#### Method A: One-Click Global Installation via CLI (Recommended)
+```bash
+cd /Users/juheng/Documents/AgentProjects/dsh-rsi
+
+# Installs to global skills directory: ~/.agents/skills/rsi
+node bin/rsi.mjs install-skill
+```
+
+#### Method B: Symlink for Live Development
+```bash
+mkdir -p ~/.agents/skills
+ln -s "$(pwd)/skills/rsi" ~/.agents/skills/rsi
+```
+
+#### Method C: Project-Scoped Installation
+To enable RSI for a specific project, copy `skills/rsi` into your project's `.agents/skills/rsi` or `.cursor/skills-cursor/rsi` directory.
+
+---
+
+### 2. Usage & Operating Modes
+
+Once installed, the skill can be invoked across any skill-aware agent runtime (DeepSeek Harness, Claude Code, Cursor, OpenClaw, etc.):
+
+#### Triggers
+- **Natural Language**:
+  > "Follow the RSI protocol: check prior memory, execute under epistemic discipline, and double-blind verify before completion."
+  > "Run RSI exploration on this new repository."
+- **Explicit Skill Invocation**:
+  Specify `skill: rsi` in your instructions to enforce the 4 Hard Gates.
+
+#### Adaptive Dual-Mode Execution
+1. **With Native DSH Plugin Installed**:
+   The agent automatically dispatches native tools (`rsi_query_memory`, `rsi_verify`, `rsi_distill_memory`, etc.), benefiting from sandbox probe guards and persisted storage.
+2. **In Pure Generic Agent Environments (Fallback)**:
+   No plugin installation required! The skill contains self-contained SOPs guiding the agent to:
+   - Formulate non-destructive read-only probes;
+   - Spawn a **pristine, zero-history subagent** to perform double-blind verification, preventing False-Done;
+   - Distill empirical findings into structured causal rule files under `.rsi/memory/`.
+
+#### CLI Helper
+```bash
+# Print full skill instructions to stdout
+node bin/rsi.mjs skill --print
+```
+
 ## Automated Test Suite
 
 The project uses the native Node.js test runner (`node:test`), with no external test framework and no flaky dependencies:

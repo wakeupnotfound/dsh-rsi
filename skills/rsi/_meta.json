@@ -1,0 +1,8 @@
+{
+  "slug": "rsi",
+  "version": "0.1.0",
+  "title": "RSIAgent Recursive Self-Improvement",
+  "description": "Double-blind verification, epistemic grounding, and durable causal memory evolution",
+  "author": "wakeupnotfound",
+  "license": "Apache-2.0"
+}
