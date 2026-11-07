@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://arxiv.org/abs/2609.15364"><img src="https://img.shields.io/badge/Paper-arXiv%3A2609.15364-b31b1b?style=flat" alt="Paper: arXiv"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg?style=flat" alt="License: Apache 2.0"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/DSH_Plugin-v0.1.0-6554c0?style=flat" alt="DSH Plugin v0.1.0"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/DSH_Plugin-v0.2.0-6554c0?style=flat" alt="DSH Plugin v0.2.0"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D20.0.0-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js >= 20.0.0"></a>
 </p>
 
@@ -50,7 +50,7 @@
 `dsh-rsi` 严格遵循 DSH 的 Bundle 与 Component 规范，拆分为 **4 个独立可启停的运行中组件**：
 
 ```text
-dsh-rsi (v0.1.0)
+dsh-rsi (v0.2.0)
 │
 ├── dsh-rsi-verifier   [RSIAgent 独立双盲验证器]
 │     └── 基于 Epistemic 准则对候选交付物执行独立只读探针，防范 Agent 自欺与假阳性 (False-Done)。
@@ -145,11 +145,11 @@ DSH 只负责注入 Prompt Section 并注册工具，**不会在任务结束时�
    rm -rf /tmp/dsh-rsi-pkg && mkdir -p /tmp/dsh-rsi-pkg/package
    cp -R bin lib locale docs cordis.patch.yml dsh-plugin.json package.json icon.png LICENSE README.md README-EN.md /tmp/dsh-rsi-pkg/package/
    find /tmp/dsh-rsi-pkg -name '.DS_Store' -delete
-   tar -czf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz -C /tmp/dsh-rsi-pkg package
-   tar -tzf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz | grep -c '.DS_Store'   # 期望输出 0
+   tar -czf ~/.dsh/plugin-packages/dsh-rsi-0.2.0.tgz -C /tmp/dsh-rsi-pkg package
+   tar -tzf ~/.dsh/plugin-packages/dsh-rsi-0.2.0.tgz | grep -c '.DS_Store'   # 期望输出 0
    ```
 2. **确认文件归档路径**：
-   `~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz`
+   `~/.dsh/plugin-packages/dsh-rsi-0.2.0.tgz`
 3. **在 DSH 桌面 Profile 中关联该归档**。
 4. **重启 DSH**。
 

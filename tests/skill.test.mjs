@@ -39,5 +39,5 @@ test('RSI Skill definitions and reference files integrity', () => {
   // Check _meta.json
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
   assert.equal(meta.slug, 'rsi');
-  assert.equal(meta.version, '0.1.0');
+  assert.equal(meta.version, '0.2.0');
 });

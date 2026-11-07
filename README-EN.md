@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://arxiv.org/abs/2609.15364"><img src="https://img.shields.io/badge/Paper-arXiv%3A2609.15364-b31b1b?style=flat" alt="Paper: arXiv"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg?style=flat" alt="License: Apache 2.0"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/DSH_Plugin-v0.1.0-6554c0?style=flat" alt="DSH Plugin v0.1.0"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/DSH_Plugin-v0.2.0-6554c0?style=flat" alt="DSH Plugin v0.2.0"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D20.0.0-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js >= 20.0.0"></a>
 </p>
 
@@ -52,7 +52,7 @@ AI coding agents built on large models commonly face three problems in complex e
 `dsh-rsi` follows the DSH Bundle and Component specifications and ships as **four independently enableable runtime components**:
 
 ```text
-dsh-rsi (v0.1.0)
+dsh-rsi (v0.2.0)
 │
 ├── dsh-rsi-verifier   [Independent Double-Blind Verifier]
 │     └── Runs read-only probes against candidate deliverables under the Epistemic doctrine, preventing self-deception and False-Done.
@@ -148,11 +148,11 @@ This protocol is injected as the `dsh-rsi:rsi-protocol` prompt section (order 31
    rm -rf /tmp/dsh-rsi-pkg && mkdir -p /tmp/dsh-rsi-pkg/package
    cp -R bin lib locale docs cordis.patch.yml dsh-plugin.json package.json icon.png LICENSE README.md README-EN.md /tmp/dsh-rsi-pkg/package/
    find /tmp/dsh-rsi-pkg -name '.DS_Store' -delete
-   tar -czf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz -C /tmp/dsh-rsi-pkg package
-   tar -tzf ~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz | grep -c '.DS_Store'   # expected: 0
+   tar -czf ~/.dsh/plugin-packages/dsh-rsi-0.2.0.tgz -C /tmp/dsh-rsi-pkg package
+   tar -tzf ~/.dsh/plugin-packages/dsh-rsi-0.2.0.tgz | grep -c '.DS_Store'   # expected: 0
    ```
 2. **Confirm the archive path**:
-   `~/.dsh/plugin-packages/dsh-rsi-0.1.0.tgz`
+   `~/.dsh/plugin-packages/dsh-rsi-0.2.0.tgz`
 3. **Associate the archive with the DSH desktop profile.**
 4. **Restart DSH.**
 
