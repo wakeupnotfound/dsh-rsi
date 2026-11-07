@@ -4,5 +4,22 @@
   "title": "RSIAgent Recursive Self-Improvement",
   "description": "Double-blind verification, epistemic grounding, and durable causal memory evolution",
   "author": "wakeupnotfound",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "icon": "./icon.png",
+  "svgIcon": "./icon.svg",
+  "displayName": "RSIAgent: 递归自我改进与独立双盲验证",
+  "displayNameEn": "RSIAgent: Recursive Self-Improvement",
+  "summary": "无需微调的 Agent 自我改进技能。遵循认识论六大真理信道（E1-E6），通过零历史独立双盲验证杜绝 False-Done，提炼结构化因果规则并持续演化。",
+  "summaryEn": "Training-free recursive self-improvement for AI coding agents. Eliminates False-Done via zero-history double-blind verification and distills empirical lessons into evolvable durable memory.",
+  "tags": [
+    "self-improvement",
+    "verification",
+    "double-blind",
+    "epistemic-core",
+    "memory-distillation",
+    "debugging",
+    "code-audit"
+  ],
+  "homepage": "https://github.com/wakeupnotfound/dsh-rsi",
+  "repository": "https://github.com/wakeupnotfound/dsh-rsi"
 }
