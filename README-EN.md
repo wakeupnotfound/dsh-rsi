@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://arxiv.org/abs/2609.15364"><img src="https://img.shields.io/badge/Paper-arXiv%3A2609.15364-b31b1b?style=flat" alt="Paper: arXiv"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg?style=flat" alt="License: Apache 2.0"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/DSH_Plugin-v0.2.0-6554c0?style=flat" alt="DSH Plugin v0.2.0"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/DSH_Plugin-v0.3.0-6554c0?style=flat" alt="DSH Plugin v0.3.0"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D20.0.0-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js >= 20.0.0"></a>
 </p>
 
@@ -52,7 +52,7 @@ AI coding agents built on large models commonly face three problems in complex e
 `dsh-rsi` follows the DSH Bundle and Component specifications and ships as **four independently enableable runtime components**:
 
 ```text
-dsh-rsi (v0.2.0)
+dsh-rsi (v0.3.0)
 │
 ├── dsh-rsi-verifier   [Independent Double-Blind Verifier]
 │     └── Runs read-only probes against candidate deliverables under the Epistemic doctrine, preventing self-deception and False-Done.

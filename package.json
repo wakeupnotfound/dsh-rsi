@@ -1,6 +1,6 @@
 {
   "name": "dsh-rsi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "基于 RSIAgent 递归自我改进引擎：独立双盲验证、因果经验提炼与跨会话可演化记忆",
   "icon": "./icon.png",
   "type": "module",
@@ -44,7 +44,8 @@
     }
   },
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "build:skill": "npx esbuild bin/rsi.mjs --bundle --platform=node --target=node20 --format=esm --outfile=skills/rsi/scripts/rsi-cli.mjs",
+    "test": "npm run build:skill && node --test tests/*.test.mjs",
     "status": "node bin/rsi.mjs status"
   },
   "keywords": [
@@ -84,5 +85,8 @@
     "README-EN.md",
     "docs",
     "skills"
-  ]
+  ],
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
 }

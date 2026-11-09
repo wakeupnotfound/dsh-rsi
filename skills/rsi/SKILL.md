@@ -1,13 +1,6 @@
 ---
 name: rsi
-description: >
-  Recursive Self-Improvement (RSI) workflow for engineering, debugging, and coding tasks, grounded in RSIAgent (arXiv:2609.15364).
-  Enforces epistemic grounding (E1-E6), double-blind verification, causal experience distillation, and durable memory evolution.
-  Use when:
-  (1) Tackling non-trivial engineering tasks, bug investigations, refactoring, or critical deliverables;
-  (2) Working in unfamiliar repositories or encountering unexpected build/test/runtime errors;
-  (3) Completing a task where false-done (self-deception) must be prevented by an independent zero-history verifier;
-  (4) User requests "run RSI", "verify thoroughly", "distill lesson", "explore repo", or "practice this task".
+description: Recursive Self-Improvement (RSIAgent) — 提供双盲独立验证、防伪因果记忆提炼与失败驱动练习闭环。在执行非平凡代码修改、Bug 修复、架构探索或测试验证时激活。
 allowed-tools:
   - rsi_query_memory
   - rsi_verify
@@ -15,7 +8,6 @@ allowed-tools:
   - rsi_reconcile_memory
   - rsi_explore
   - rsi_practice
-  - subagent
   - bash
   - ops_bash
   - read
@@ -24,25 +16,21 @@ allowed-tools:
 metadata:
   framework: RSIAgent
   paper: "arXiv:2609.15364"
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
-# RSIAgent — Recursive Self-Improvement Skill
-
-A strict cognitive and operational workflow to prevent agent self-deception (**False-Done**), guarantee epistemic rigor, and distill verified empirical lessons into an evolvable cross-session memory bank.
-
----
+# RSIAgent 自进化执行协议
 
 ## The RSI Pipeline
 
-```
+```text
 Task Ingestion
       ↓
-[Phase 1] Recall Memory (经验召回：查询环境避坑与最佳实践)
+[Phase 1] Context & Recall (经验召回：查询环境避坑与最佳实践)
       ↓
 [Phase 2] Grounded Execution (认识论纪律 E1-E6：事实信道锚定)
       ↓
-[Phase 3] Double-Blind Verification (独立双盲验证：零历史子智能体盲审)
+[Phase 3] Double-Blind Verification (独立双盲验证：客观探针与防伪回执)
       ↓
 [Phase 4] Causal Distillation (因果提炼：前置条件 + 成功解法 + 避坑 + 证据)
       ↓
@@ -51,98 +39,30 @@ Task Ingestion
 
 ---
 
-## 4 Hard Gates (Non-Negotiable)
+## 0. 环境预检（Preflight，仅模式 B 需要）
+1. **Node.js 自检**：执行 `node --version`，要求 >= 20.0.0。若不可用或版本过低，向用户明确报告“RSI 单 Skill 模式需要 Node.js >= 20”，并降级为**纯认识论规程模式**：仅遵循本文件 §2 的闭环原则与按需阅读 `references/`，跳过所有 CLI 调用（验证以宿主可用的测试命令直接执行并如实记录结果）。
+2. **`<SKILL_DIR>` 自定位**：`<SKILL_DIR>` 是本 `SKILL.md` 所在目录的绝对路径。宿主在加载本技能时通常会显示其路径，直接使用即可；若无法确定，依次探测常见安装位置（如 `~/.claude/skills/rsi/`、当前项目的 `.claude/skills/rsi/`、`skills/rsi/`），仍无法确定时询问用户，**禁止臆造路径**。
 
-1. **NO SELF-CERTIFICATION**: Never announce "Task completed" based solely on your own reasoning or self-test in the same session context.
-2. **ZERO-HISTORY BLIND AUDIT**: The Verifier MUST NOT receive the Actor's scratchpad, reasoning history, or subjective interpretations.
-3. **THE DOUBT INVARIANT**: A `PASS` verdict without an explicit attestation of `DOUBTS: None` (or `无`) is automatically downgraded to `FAIL`.
-4. **CAUSAL SPECIFICATION**: Memory distillation must produce structured causal rules (Preconditions, Proven Rule, Pitfalls, Evidence), never vague conversational summaries.
+## 1. 运行模式自检与调用路由（Dual-Mode Dispatch）
+在完成 §0 预检后，检查当前环境可用工具：
+- **模式 A（原生 Tool 模式）**：若环境中已注册 `rsi_verify`、`rsi_distill_memory`、`rsi_query_memory`、`rsi_explore`、`rsi_practice`（无论来自 DSH 插件还是 MCP Server），请直接调用对应原生工具。
+- **模式 B（Standalone 单 Skill CLI 模式）**：若环境中无上述原生工具，必须通过 Bash/终端运行本技能目录内置的自包含脚本（`<SKILL_DIR>` 按 §0.2 确定）：
+  1. **任务上下文与记忆召回**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" context --task "<当前任务简述>" --top-k 5`
+  2. **仓库波次探索**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" explore --goal "<探索目标>"`
+  3. **独立双盲验证**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" verify --target "<目标文件或模块>" --probe "<验证测试命令>"`
+  4. **因果记忆提炼**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" distill --target "<与 verify 相同的目标>" --title "<规则标题>" --preconditions "<触发前提>" --rule "<已验证规则>" --evidence "<实证依据>"`（自动读取最近一次验证回执，校验签名与目标任务绑定）
+  5. **失败刻意练习**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" practice --target "<目标>" --failure "<失败原因>" --probe "<验证命令>"`
 
----
+## 2. 强制自进化闭环（Mandatory Epistemic Loop）
+1. **先查后改（Query Before Act）**：动手修改代码前，必须先执行 `query` 或 `context`，检查 `.rsi/memory/` 中是否已有相关模块的踩坑规则。
+2. **双盲验证（Double-Blind Verification, E2/E3）**：严禁仅凭代码静态阅读或主观推断宣称“修复完成”。交付前必须调用 `verify` 运行客观探针并获取 `verification_receipt`。
+3. **遇错必练、破局必存（Phase 2 Loop, E4/E5）**：
+   - 若 `verify` 返回 `FAIL`：**禁止立即盲目修改代码重试**。必须先按需阅读 `references/causal-distillation.md`，调用 `distill` 记录失败模式，并调用 `practice` 生成四步靶向练习计划。
+   - 若解决非平凡问题后 `verify` 返回 `PASS`：必须调用 `distill` 将因果经验持久化至 `.rsi/memory/`。
 
-## Phase 1: Memory Recall (经验召回)
-
-**Trigger:** Starting any non-trivial engineering task or entering an unfamiliar codebase.
-
-1. Extract 2–5 specific keywords from the objective (library names, CLI flags, runtime environment, e.g., `["vite", "esbuild", "timeout"]`).
-2. Search durable memory:
-   - **Native mode**: Call `rsi_query_memory({ query: "..." })`.
-   - **Fallback mode**: Inspect `.rsi/memory/` or search local rule markdown files.
-3. Adopt relevant rules: check preconditions and apply past verified procedures to avoid known pitfalls.
-
----
-
-## Phase 2: Grounded Execution (认识论执行纪律)
-
-**Trigger:** Writing code, executing scripts, debugging, or diagnosing issues.
-
-Follow the **Epistemic Core (E1–E6)** (see [references/epistemic-core.md](references/epistemic-core.md)):
-- **E1 (Truth Channels)**: Ground all factual claims in physical files, live process output, or test suites. Do not guess file contents.
-- **E2 (Structural vs Rendered)**: Verify exact text, counts, and syntax in source files; verify visual layout via rendered screens.
-- **E3 (Errors Are Evidence)**: Never redirect errors to `/dev/null` or silence failing exit codes. Stack traces are primary causal evidence.
-- **E4 (Silence Proves Nothing)**: Timeouts, network silent drops, or empty outputs are not proof of absence or success.
-- **E5 (Confirmation Requires Independence)**: Self-agreement is not verification.
-- **E6 (Evidence Is Data)**: Record actual exit codes, error snippets, and file paths.
-
----
-
-## Phase 3: Double-Blind Verification (独立双盲验证)
-
-**Trigger:** All code edits and local tests appear complete. You are ready to deliver.
-
-**See:** [references/double-blind-verification.md](references/double-blind-verification.md)
-
-### Protocol:
-1. Formulate 1–3 **Safe, Read-Only Probes** (e.g., `npm test`, `node --check <file>`, test curl, or file state inspection).
-   - Probes must NOT mutate files, delete data, or install packages.
-2. Execute verification:
-   - **Native mode**: Call `rsi_verify({ task_objective, deliverables, probes })`. Pass the returned `verifier_system_prompt` to a fresh independent `subagent` that has **zero actor history**.
-   - **Fallback mode**: Spawn a fresh subagent with NO conversation history. Provide only:
-     - Task Objective
-     - Deliverable paths
-     - Read-only probe commands
-3. Subagent Verifier audits against the deliverable and outputs:
-   ```
-   FINDINGS: <Concrete evidence observed from probes>
-   DOUBTS: None (or explicit unresolved doubts)
-   VERDICT: PASS | FAIL
-   ```
-4. If `VERDICT: FAIL` or `DOUBTS` is not clean: Return to Phase 2, fix the root cause, and re-verify.
-
----
-
-## Phase 4: Causal Distillation (因果经验提炼)
-
-**Trigger:** Verification passed, OR a hard failure occurred after multiple debugging rounds.
-
-**See:** [references/causal-distillation.md](references/causal-distillation.md)
-
-Distill the experience into a durable rule with the strict 4-section schema:
-1. **Preconditions**: Exact OS, Node/Python version, library version, architecture.
-2. **Proven Rule**: The exact working command, configuration, or code pattern.
-3. **Pitfalls**: Why the intuitive approach failed (counterfactuals).
-4. **Evidence**: Exact error messages, stack traces, and exit codes observed.
-
-Execute distillation:
-- **Native mode**: Call `rsi_distill_memory({ task_objective, verdict, verifier_report, trajectory_summary, rule_content })`.
-- **Fallback mode**: Write the drafted Markdown to `.rsi/memory/<kebab-case-slug>.md`.
-
----
-
-## Phase 5: Reconcile & Persist (记忆调和与持久化)
-
-**Trigger:** After committing a new rule.
-
-1. Inspect for conflicts: Check if the new rule contradicts an older rule.
-2. **Native mode**: Call `rsi_reconcile_memory({ entry_id })`.
-3. If an older procedure has been superseded by a better one on the same topic, archive or update the obsolete entry.
-
----
-
-## Autonomous Modes: Exploration & Practice
-
-When the task is open-ended exploration of an unfamiliar repo or solving an exceptionally difficult challenge:
-- **Phase 1 Broad Exploration**: Use [references/exploration-and-practice.md](references/exploration-and-practice.md) to launch multi-wave survey and deep probes.
-- **Phase 2 Deliberate Practice**: Execute the state machine:
-  $$	ext{FAIL} 	o 	ext{Distill} 	o 	ext{Practice} 	o 	ext{Retry}$$
-  until `PASS` or the attempt budget is exhausted.
+## 3. 参考规范按需懒加载（Lazy-Loaded References）
+为节约上下文窗口，**切勿一次性读取全部参考文件**，仅在触发对应场景时按需读取：
+- 初次探索陌生大型代码库时 -> 读取 `references/exploration-and-practice.md`
+- 构造双盲验证探针或遇白名单拦截时 -> 读取 `references/double-blind-verification.md`
+- 需要执行 `distill` 提炼规则或消解冲突时 -> 读取 `references/causal-distillation.md`
+- 出现认识论违规争议时 -> 读取 `references/epistemic-core.md`
