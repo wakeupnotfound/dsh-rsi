@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 // bin/rsi.mjs
-import fs4 from "node:fs";
-import path4 from "node:path";
+import fs5 from "node:fs";
+import path6 from "node:path";
 import os3 from "node:os";
 import crypto3 from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -96,9 +96,9 @@ function renderMemoryPreamble(memoryInventory = [], options = {}) {
 }
 
 // lib/core/memory.js
-import fs2 from "node:fs/promises";
+import fs3 from "node:fs/promises";
 import fsSync from "node:fs";
-import path2 from "node:path";
+import path4 from "node:path";
 import os2 from "node:os";
 import crypto2 from "node:crypto";
 
@@ -168,7 +168,7 @@ var sha256 = (s) => crypto.createHash("sha256").update(String(s ?? "")).digest("
 function normalizeTarget(target) {
   return String(target ?? "").trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "").toLowerCase();
 }
-function createReceipt(keyring, { verdict, report, target, receiptId, createdAt }) {
+function createReceipt(keyring, { verdict, report, target, receiptId, createdAt, workspaceSnapshot, workspacePolluted }) {
   const t = typeof createdAt === "number" ? createdAt : Date.now();
   const id = receiptId || `rcpt_${t}_${crypto.randomBytes(4).toString("hex")}`;
   const payload = {
@@ -179,6 +179,12 @@ function createReceipt(keyring, { verdict, report, target, receiptId, createdAt 
   };
   if (target !== void 0 && target !== null && String(target).trim()) {
     payload.th = sha256(normalizeTarget(target));
+  }
+  if (workspaceSnapshot) {
+    payload.ws = String(workspaceSnapshot);
+  }
+  if (typeof workspacePolluted === "boolean") {
+    payload.wp = workspacePolluted;
   }
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = keyring.sign(`receipt:${body}`, { create: true });
@@ -219,8 +225,76 @@ function verifyReceipt(keyring, receipt, { report, target, maxAgeMs = 24 * 3600 
     reportSha: data.h,
     targetHash: data.th,
     issuedAt: data.t,
-    reportMatches
+    reportMatches,
+    workspaceSnapshot: data.ws || null,
+    workspacePolluted: Boolean(data.wp)
   };
+}
+
+// lib/core/reconciliation.js
+import path3 from "node:path";
+
+// lib/core/distillation.js
+import fs2 from "node:fs/promises";
+import path2 from "node:path";
+var PROBES_DIR = ".rsi/probes";
+function slugify(text, fallback = "lesson") {
+  const slug = String(text ?? "").toLowerCase().replace(/[^\p{Letter}\p{Number}_-]+/gu, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+  return slug || fallback;
+}
+function extractRecheckCommand(content) {
+  if (!content || typeof content !== "string") return "";
+  const match = content.match(/###\s+Re-check Command\s*\r?\n+`([^`\r\n]+)`/i);
+  return match ? match[1].trim() : "";
+}
+async function synthesizeRegressionProbe(workdir = process.cwd(), spec = {}) {
+  const memoryId = slugify(spec.memoryId || "", "");
+  const probeCommand = String(spec.probeCommand ?? "").trim();
+  if (!memoryId || !probeCommand) return null;
+  const probesDir = path2.join(workdir, PROBES_DIR);
+  await fs2.mkdir(probesDir, { recursive: true });
+  const probe = {
+    memoryId,
+    title: String(spec.title || memoryId),
+    target: String(spec.target || ""),
+    probeCommand,
+    expectedExitCode: typeof spec.expectedExitCode === "number" ? spec.expectedExitCode : 0,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const probePath = path2.join(probesDir, `${memoryId}.json`);
+  await fs2.writeFile(probePath, JSON.stringify(probe, null, 2), "utf-8");
+  return { synthesized: true, probePath, probe };
+}
+async function loadRegressionProbes(workdir = process.cwd()) {
+  const probesDir = path2.join(workdir, PROBES_DIR);
+  let files = [];
+  try {
+    files = await fs2.readdir(probesDir);
+  } catch {
+    return [];
+  }
+  const jsonFiles = files.filter((f) => f.endsWith(".json")).sort();
+  const probes = [];
+  for (const file of jsonFiles) {
+    const filePath = path2.join(probesDir, file);
+    try {
+      const raw = await fs2.readFile(filePath, "utf-8");
+      const data = JSON.parse(raw);
+      if (data && typeof data.probeCommand === "string" && data.probeCommand.trim()) {
+        probes.push({
+          memoryId: String(data.memoryId || path2.basename(file, ".json")),
+          title: String(data.title || data.memoryId || path2.basename(file, ".json")),
+          target: String(data.target || ""),
+          probeCommand: data.probeCommand.trim(),
+          expectedExitCode: typeof data.expectedExitCode === "number" ? data.expectedExitCode : 0,
+          createdAt: data.createdAt || null,
+          filePath
+        });
+      }
+    } catch {
+    }
+  }
+  return probes;
 }
 
 // lib/core/reconciliation.js
@@ -379,8 +453,22 @@ var MemoryReconciler = class {
         await memoryBank.save(old, old.scope || scope);
       }
       const result = await memoryBank.save(newEntry, scope);
+      const isVerified = newEntry.verified === true || newEntry.verified !== false && newEntry.confidence === "VERIFIED";
+      const probeCmd = String(newEntry.verifyCommand || extractRecheckCommand(newEntry.content) || "").trim();
+      const workdir = memoryBank.workspaceRoot || (memoryBank.workspaceDir ? path3.resolve(memoryBank.workspaceDir, "..", "..") : null);
+      let synthesizedProbe = null;
+      if (isVerified && probeCmd && workdir) {
+        synthesizedProbe = await synthesizeRegressionProbe(workdir, {
+          memoryId: newEntry.id,
+          title: newEntry.title,
+          target: newEntry.target || "",
+          probeCommand: probeCmd,
+          expectedExitCode: typeof newEntry.expectedExitCode === "number" ? newEntry.expectedExitCode : 0
+        });
+      }
       return {
         committed: result,
+        ...synthesizedProbe ? { synthesizedProbe } : {},
         reconciliationReport: {
           conflictsResolved: analysis.conflicts.length,
           relatedTopicsFound: analysis.merges.length,
@@ -389,7 +477,7 @@ var MemoryReconciler = class {
         }
       };
     };
-    return typeof memoryBank.withLock === "function" ? memoryBank.withLock(run) : run();
+    return typeof memoryBank.withLock === "function" ? memoryBank.withLock(run, scope) : run();
   }
 };
 
@@ -679,25 +767,28 @@ function runExclusive(key, fn) {
     }
   });
 }
-async function acquireFileLock(dir) {
-  const lockPath = path2.join(dir, LOCK_FILE);
+async function acquireFileLock(dir, { allowPermissionFallback = false } = {}) {
+  const lockPath = path4.join(dir, LOCK_FILE);
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   for (; ; ) {
     try {
-      const handle = await fs2.open(lockPath, "wx");
+      const handle = await fs3.open(lockPath, "wx");
       await handle.writeFile(`${process.pid}
 `);
       await handle.close();
       return async () => {
-        await fs2.unlink(lockPath).catch(() => {
+        await fs3.unlink(lockPath).catch(() => {
         });
       };
     } catch (err) {
+      if (allowPermissionFallback && (err?.code === "EPERM" || err?.code === "EACCES" || err?.code === "EROFS")) {
+        return null;
+      }
       if (err?.code !== "EEXIST") throw err;
       try {
-        const st = await fs2.stat(lockPath);
+        const st = await fs3.stat(lockPath);
         if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
-          await fs2.unlink(lockPath).catch(() => {
+          await fs3.unlink(lockPath).catch(() => {
           });
           continue;
         }
@@ -720,26 +811,27 @@ var MemoryBank = class _MemoryBank {
    */
   constructor(options = {}) {
     this.workspaceRoot = options.workspaceDir || null;
-    this.workspaceDir = options.workspaceDir ? path2.join(options.workspaceDir, ".rsi", "memory") : null;
-    this.globalDir = options.globalDir || path2.join(os2.homedir(), ".dsh", "storages", "rsi", "memory");
+    this.workspaceDir = options.workspaceDir ? path4.join(options.workspaceDir, ".rsi", "memory") : null;
+    this.globalDir = options.globalDir || path4.join(os2.homedir(), ".dsh", "storages", "rsi", "memory");
     this.hasGlobalAccess = true;
-    this.keyring = Keyring.for(options.keyFile || path2.join(path2.dirname(this.globalDir), ".integrity-key"));
+    this.keyring = Keyring.for(options.keyFile || path4.join(path4.dirname(this.globalDir), ".integrity-key"));
     this.workspaceTrust = options.workspaceTrust === "all" ? "all" : "signed";
     this.maxEntryBytes = options.maxEntryBytes || DEFAULT_MAX_ENTRY_BYTES;
     this.cache = /* @__PURE__ */ new Map();
   }
   /** Create the writable directories. Only called on writes. */
-  async init() {
-    if (this.hasGlobalAccess) {
+  async init(scope) {
+    const needGlobal = !scope || scope === "global" || !this.workspaceDir;
+    if (needGlobal && this.hasGlobalAccess) {
       try {
-        await fs2.mkdir(this.globalDir, { recursive: true });
+        await fs3.mkdir(this.globalDir, { recursive: true });
       } catch {
         this.hasGlobalAccess = false;
       }
     }
     if (this.workspaceDir) {
       try {
-        await fs2.mkdir(this.workspaceDir, { recursive: true });
+        await fs3.mkdir(this.workspaceDir, { recursive: true });
       } catch {
       }
     }
@@ -808,8 +900,8 @@ var MemoryBank = class _MemoryBank {
     const match = fileContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
     if (!match) {
       return {
-        id: path2.basename(filePath, path2.extname(filePath)),
-        title: path2.basename(filePath),
+        id: path4.basename(filePath, path4.extname(filePath)),
+        title: path4.basename(filePath),
         content: fileContent,
         tags: [],
         category: "unstructured",
@@ -826,7 +918,7 @@ var MemoryBank = class _MemoryBank {
     const last_validated_at = meta.last_validated_at || meta.updated_at || meta.created_at || null;
     return {
       ...meta,
-      id: meta.id !== void 0 ? String(meta.id) : path2.basename(filePath, path2.extname(filePath)),
+      id: meta.id !== void 0 ? String(meta.id) : path4.basename(filePath, path4.extname(filePath)),
       tags,
       verified,
       confidence,
@@ -852,20 +944,29 @@ var MemoryBank = class _MemoryBank {
     return entry;
   }
   /**
-   * Run `fn` while holding the memory lock(s) for every writable directory
+   * Run `fn` while holding the memory lock(s) for the target writable directory
    * (in-process queue + cross-process lock file). Use for read-modify-write.
+   * @param {Function} fn
+   * @param {'workspace'|'global'} [scope]
    */
-  async withLock(fn) {
-    await this.init();
-    const dirs = [...new Set(this.scopes().map((s) => path2.resolve(s.dir)))].filter((dir) => fsSync.existsSync(dir)).sort();
+  async withLock(fn, scope) {
+    await this.init(scope);
+    const resolvedGlobal = this.globalDir ? path4.resolve(this.globalDir) : null;
+    const rawDirs = scope === "workspace" && this.workspaceDir ? [path4.resolve(this.workspaceDir)] : this.scopes().map((s) => path4.resolve(s.dir));
+    const dirs = [...new Set(rawDirs)].filter((dir) => fsSync.existsSync(dir)).sort();
     const acquire = async (i) => {
       if (i >= dirs.length) return fn();
-      return runExclusive(dirs[i], async () => {
-        const release = await acquireFileLock(dirs[i]);
+      const dir = dirs[i];
+      const isGlobal = resolvedGlobal !== null && dir === resolvedGlobal;
+      return runExclusive(dir, async () => {
+        const release = await acquireFileLock(dir, { allowPermissionFallback: isGlobal });
+        if (release === null && isGlobal) {
+          this.hasGlobalAccess = false;
+        }
         try {
           return await acquire(i + 1);
         } finally {
-          await release();
+          if (release) await release();
         }
       });
     };
@@ -878,7 +979,7 @@ var MemoryBank = class _MemoryBank {
    */
   async save(entry, scope = "workspace") {
     if (!entry || !entry.id) throw new Error("Memory entry requires an id.");
-    await this.init();
+    await this.init(scope);
     let targetDir;
     if (scope === "global") targetDir = this.hasGlobalAccess ? this.globalDir : this.workspaceDir;
     else targetDir = this.workspaceDir || (this.hasGlobalAccess ? this.globalDir : null);
@@ -886,14 +987,30 @@ var MemoryBank = class _MemoryBank {
       throw new Error("No writable memory directory available.");
     }
     const fileName = memoryFileName(entry.id);
-    const fullPath = path2.join(targetDir, fileName);
     const serialized = this.serializeEntry(entry);
-    const tmpPath = `${fullPath}.${process.pid}.${Date.now()}.${crypto2.randomBytes(3).toString("hex")}.tmp`;
-    await fs2.writeFile(tmpPath, serialized, "utf-8");
-    await fs2.rename(tmpPath, fullPath);
-    const legacy = legacyMemoryFileName(entry.id);
-    if (legacy !== fileName) await fs2.unlink(path2.join(targetDir, legacy)).catch(() => {
-    });
+    const writeToDir = async (dir) => {
+      const fullPath2 = path4.join(dir, fileName);
+      const tmpPath = `${fullPath2}.${process.pid}.${Date.now()}.${crypto2.randomBytes(3).toString("hex")}.tmp`;
+      await fs3.writeFile(tmpPath, serialized, "utf-8");
+      await fs3.rename(tmpPath, fullPath2);
+      const legacy = legacyMemoryFileName(entry.id);
+      if (legacy !== fileName) await fs3.unlink(path4.join(dir, legacy)).catch(() => {
+      });
+      return fullPath2;
+    };
+    let fullPath;
+    try {
+      fullPath = await writeToDir(targetDir);
+    } catch (err) {
+      if (targetDir === this.globalDir && this.workspaceDir && (err?.code === "EPERM" || err?.code === "EACCES" || err?.code === "EROFS")) {
+        this.hasGlobalAccess = false;
+        await this.init("workspace");
+        targetDir = this.workspaceDir;
+        fullPath = await writeToDir(targetDir);
+      } else {
+        throw err;
+      }
+    }
     return {
       id: entry.id,
       path: fullPath,
@@ -913,9 +1030,9 @@ var MemoryBank = class _MemoryBank {
     let fallback = null;
     for (const { dir, scope } of this.scopes()) {
       for (const filename of this.fileNamesFor(id)) {
-        const p = path2.join(dir, filename);
+        const p = path4.join(dir, filename);
         try {
-          const text = await fs2.readFile(p, "utf-8");
+          const text = await fs3.readFile(p, "utf-8");
           const parsed = this.parseEntry(text, p);
           if (parsed.id !== String(id)) continue;
           const entry = this.decorate(parsed, scope);
@@ -955,18 +1072,18 @@ var MemoryBank = class _MemoryBank {
     for (const { dir, scope } of this.scopes()) {
       let files;
       try {
-        files = await fs2.readdir(dir);
+        files = await fs3.readdir(dir);
       } catch {
         continue;
       }
       files.sort();
       for (const file of files) {
         if (!file.endsWith(".md")) continue;
-        const fullPath = path2.join(dir, file);
+        const fullPath = path4.join(dir, file);
         try {
-          const stat = await fs2.stat(fullPath);
+          const stat = await fs3.stat(fullPath);
           if (!stat.isFile() || stat.size > this.maxEntryBytes) continue;
-          const parsed = this.readCached(fullPath, stat) ?? this.readCached(fullPath, stat, await fs2.readFile(fullPath, "utf-8"));
+          const parsed = this.readCached(fullPath, stat) ?? this.readCached(fullPath, stat, await fs3.readFile(fullPath, "utf-8"));
           _MemoryBank.addEntry(entries, index, this.decorate(parsed, scope, stat.size));
         } catch {
         }
@@ -992,7 +1109,7 @@ var MemoryBank = class _MemoryBank {
       files.sort();
       for (const file of files) {
         if (!file.endsWith(".md")) continue;
-        const fullPath = path2.join(dir, file);
+        const fullPath = path4.join(dir, file);
         try {
           const stat = fsSync.statSync(fullPath);
           if (!stat.isFile() || stat.size > this.maxEntryBytes) continue;
@@ -1006,7 +1123,7 @@ var MemoryBank = class _MemoryBank {
   }
   statsFilePath() {
     const base = this.workspaceDir || this.globalDir;
-    return path2.join(base, ".rsi", "stats.json");
+    return path4.join(base, ".rsi", "stats.json");
   }
   getStatsSync() {
     try {
@@ -1020,7 +1137,7 @@ var MemoryBank = class _MemoryBank {
   async getStats() {
     try {
       const p = this.statsFilePath();
-      const content = await fs2.readFile(p, "utf-8");
+      const content = await fs3.readFile(p, "utf-8");
       return JSON.parse(content);
     } catch {
       return {};
@@ -1030,16 +1147,16 @@ var MemoryBank = class _MemoryBank {
     const p = this.statsFilePath();
     let stats = {};
     try {
-      const content = await fs2.readFile(p, "utf-8");
+      const content = await fs3.readFile(p, "utf-8");
       stats = JSON.parse(content);
     } catch {
     }
     const updated = await updater(stats) || stats;
-    const dir = path2.dirname(p);
-    await fs2.mkdir(dir, { recursive: true });
+    const dir = path4.dirname(p);
+    await fs3.mkdir(dir, { recursive: true });
     const tmpPath = `${p}.${process.pid}.${Date.now()}.${crypto2.randomBytes(3).toString("hex")}.tmp`;
-    await fs2.writeFile(tmpPath, JSON.stringify(updated, null, 2), "utf-8");
-    await fs2.rename(tmpPath, p);
+    await fs3.writeFile(tmpPath, JSON.stringify(updated, null, 2), "utf-8");
+    await fs3.rename(tmpPath, p);
     return updated;
   }
   /**
@@ -1136,7 +1253,7 @@ var MemoryBank = class _MemoryBank {
     const report = [];
     for (const entry of entries) {
       try {
-        const rawText = await fs2.readFile(entry.filePath, "utf-8");
+        const rawText = await fs3.readFile(entry.filePath, "utf-8");
         const hasConfidence = /^confidence:/m.test(rawText);
         const hasStatus = /^status:/m.test(rawText);
         const hasLastValidated = /^last_validated_at:/m.test(rawText);
@@ -1163,7 +1280,7 @@ var MemoryBank = class _MemoryBank {
     for (const { dir } of this.scopes()) {
       for (const filename of this.fileNamesFor(id)) {
         try {
-          await fs2.unlink(path2.join(dir, filename));
+          await fs3.unlink(path4.join(dir, filename));
           deleted = true;
         } catch {
         }
@@ -1173,7 +1290,7 @@ var MemoryBank = class _MemoryBank {
   }
   static summarize(all) {
     return all.map((item) => ({
-      path: path2.basename(item.filePath),
+      path: path4.basename(item.filePath),
       size: item.size || 0,
       tags: item.tags || [],
       summary: item.title || item.category || ""
@@ -1195,6 +1312,7 @@ var MemoryBank = class _MemoryBank {
 };
 
 // lib/core/probe-policy.js
+import { spawn } from "node:child_process";
 var SHELL_OPERATORS = /* @__PURE__ */ new Set(["|", "&", ";", "<", ">", "(", ")", "`", "$", "\n", "\r"]);
 var BENIGN_REDIRECT = /(^|\s)(?:\d?>&\d|&?\d?>{1,2}\s*\/dev\/null|\d?>{1,2}\s*NUL|\d?>{1,2}\s*\$null)(?=\s|$)/gi;
 function tokenizeProbe(command2) {
@@ -1440,17 +1558,130 @@ var ProbePolicy = class {
   }
 };
 var DEFAULT_PROBE_POLICY = new ProbePolicy();
+function captureWorkspaceSnapshot(workdir = process.cwd()) {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let settled = false;
+    const finish = (isGit, status = null) => {
+      if (settled) return;
+      settled = true;
+      resolve({ isGit, status });
+    };
+    let child;
+    try {
+      child = spawn("git", ["status", "--porcelain"], {
+        cwd: workdir,
+        shell: false,
+        stdio: ["ignore", "pipe", "ignore"],
+        windowsHide: true
+      });
+    } catch {
+      finish(false, null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+      }
+      finish(false, null);
+    }, 5e3);
+    child.stdout.setEncoding("utf8").on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.on("error", () => {
+      clearTimeout(timer);
+      finish(false, null);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        finish(true, stdout.replace(/\r\n/g, "\n").trim());
+      } else {
+        finish(false, null);
+      }
+    });
+  });
+}
+function compareWorkspaceSnapshots(before, after) {
+  if (!before?.isGit || !after?.isGit) {
+    return {
+      workspace_snapshot: "skipped_non_git",
+      workspace_polluted: false
+    };
+  }
+  const beforeText = String(before.status ?? "").trim();
+  const afterText = String(after.status ?? "").trim();
+  if (beforeText === afterText) {
+    return {
+      workspace_snapshot: "clean",
+      workspace_polluted: false
+    };
+  }
+  const beforeLines = new Set(beforeText ? beforeText.split("\n") : []);
+  const afterLines = afterText ? afterText.split("\n") : [];
+  const pollutedEntries = afterLines.filter((line) => !beforeLines.has(line));
+  return {
+    workspace_snapshot: "dirty",
+    workspace_polluted: true,
+    polluted_entries: pollutedEntries.length > 0 ? pollutedEntries : afterLines
+  };
+}
 
 // lib/core/verifier.js
-import { spawn } from "node:child_process";
-import fs3 from "node:fs/promises";
-import path3 from "node:path";
+import { spawn as spawn2 } from "node:child_process";
+import fs4 from "node:fs/promises";
+import path5 from "node:path";
 var VERDICTS = Object.freeze({
   PASS: "PASS",
   FAIL: "FAIL",
   UNVERIFIED: "UNVERIFIED"
 });
 var PROBE_OUTPUT_LIMIT = 2e4;
+var REGRESSION_PROBE_TIMEOUT_MS = 6e4;
+var GUIDANCE_BEGIN = "---RSI-GUIDANCE-BEGIN---";
+var GUIDANCE_END = "---RSI-GUIDANCE-END---";
+function sanitizeGuidanceMarkers(text) {
+  return String(text ?? "").replace(/---RSI-GUIDANCE-BEGIN---/g, "[REDACTED-GUIDANCE-BEGIN]").replace(/---RSI-GUIDANCE-END---/g, "[REDACTED-GUIDANCE-END]");
+}
+function renderCliGuidance({ step = "verify", receiptId = "", verdict = "" } = {}) {
+  const safeId = String(receiptId || "").replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 64);
+  const safeVerdict = ["PASS", "FAIL", "UNVERIFIED"].includes(verdict) ? verdict : "";
+  const lines = [GUIDANCE_BEGIN];
+  if (safeId) {
+    lines.push(`Receipt: ${safeId}${safeVerdict ? ` (${safeVerdict})` : ""}`);
+  }
+  switch (step) {
+    case "verify":
+      if (safeVerdict === "PASS") {
+        lines.push("Next Action: Execute distill to persist the verified causal lesson into durable memory:");
+        lines.push('  rsi distill --target "<same-target>" --title "<title>" --preconditions "<pre>" --rule "<rule>" --evidence "<ev>"');
+      } else {
+        lines.push("Next Action: Do NOT blindly retry edits. Distill failure mode and execute practice loop:");
+        lines.push('  rsi practice --target "<target>" --failure "<failure-summary>" --probe "<probe-cmd>"');
+      }
+      break;
+    case "distill":
+      lines.push("Next Action: Run regression probes to verify historical rules remain intact:");
+      lines.push("  rsi regression");
+      break;
+    case "regression":
+      lines.push("Next Action: If any regression probe failed, inspect the violated rule and run verify/practice.");
+      break;
+    case "context":
+    case "query":
+      lines.push("Next Action: Apply recalled rules during implementation, then run verify with --memory-ids.");
+      break;
+    case "practice":
+      lines.push("Next Action: Follow the 4-stage practice state machine and re-verify via rsi verify.");
+      break;
+    default:
+      lines.push("Next Action: Complete verification via rsi verify before claiming task completion.");
+      break;
+  }
+  lines.push(GUIDANCE_END);
+  return lines.join("\n");
+}
 var PROBE_BUFFER_LIMIT = 5 * 1024 * 1024;
 function isEmptyDoubts(text) {
   const t = String(text ?? "").trim().replace(/^[-*\s]+/, "").replace(/[.。!！\s]+$/, "");
@@ -1464,10 +1695,14 @@ var VerifierRuntime = class {
    * @param {number} [options.maxProbes=10]
    * @param {boolean} [options.allowTestRunners=true] - allow npm test / node --test / pytest / ... probes
    * @param {string[]} [options.extraProbePrograms] - operator-approved extra programs
+   * @param {'host'|'docker'} [options.sandbox='host'] - optional docker escape hatch (read-only mount)
+   * @param {string} [options.dockerImage='node:20-alpine'] - container image when sandbox='docker'
    */
   constructor(options = {}) {
     this.timeoutMs = options.timeoutMs || 3e4;
     this.maxProbes = options.maxProbes || 10;
+    this.sandbox = options.sandbox === "docker" ? "docker" : "host";
+    this.dockerImage = options.dockerImage || "node:20-alpine";
     this.policy = new ProbePolicy({
       allowTestRunners: options.allowTestRunners,
       extraPrograms: options.extraProbePrograms
@@ -1483,24 +1718,57 @@ var VerifierRuntime = class {
   }
   /**
    * Execute a single read-only probe. Probes are spawned directly (no shell),
-   * with stdin closed, a timeout and bounded output.
+   * with stdin closed, a timeout, bounded output, and workspace snapshot guard.
+   * When `sandbox: 'docker'` is requested, the probe command STILL goes through
+   * `this.policy.check(command)` first before mounting the workspace `:ro`.
    * @param {string} command
    * @param {string} [workdir]
-   * @param {{signal?: AbortSignal}} [options]
+   * @param {{signal?: AbortSignal, timeoutMs?: number, sandbox?: 'host'|'docker', dockerImage?: string, skipSnapshot?: boolean}} [options]
    */
   async runProbe(command2, workdir = process.cwd(), options = {}) {
+    const startTime = Date.now();
     const decision = this.policy.check(command2);
     if (!decision.ok) {
+      const snap = options.skipSnapshot ? null : await captureWorkspaceSnapshot(workdir);
+      const snapState = options.skipSnapshot ? "clean" : snap?.isGit ? "clean" : "skipped_non_git";
       return {
         command: String(command2 ?? ""),
         exitCode: 1,
+        durationMs: Date.now() - startTime,
         stdout: "",
         stderr: `PROBE_REJECTED: ${decision.reason}. Verifier probes must be read-only commands from the allowlist (no shell operators).`,
         blocked: true,
-        timedOut: false
+        timedOut: false,
+        workspace_snapshot: snapState,
+        workspace_polluted: false
       };
     }
-    return new Promise((resolve) => {
+    const beforeSnap = options.skipSnapshot ? null : await captureWorkspaceSnapshot(workdir);
+    const effectiveTimeout = typeof options.timeoutMs === "number" && options.timeoutMs > 0 ? options.timeoutMs : this.timeoutMs;
+    const sandboxMode = (options.sandbox || this.sandbox) === "docker" ? "docker" : "host";
+    const dockerImage = options.dockerImage || this.dockerImage || "node:20-alpine";
+    let spawnFile = decision.file;
+    let spawnArgs = decision.args;
+    let spawnShell = decision.shell;
+    if (sandboxMode === "docker") {
+      spawnFile = "docker";
+      spawnArgs = [
+        "run",
+        "--rm",
+        "--read-only",
+        "-v",
+        `${path5.resolve(workdir)}:/workspace:ro`,
+        "--tmpfs",
+        "/tmp",
+        "-w",
+        "/workspace",
+        dockerImage,
+        decision.file,
+        ...decision.args
+      ];
+      spawnShell = false;
+    }
+    const rawResult = await new Promise((resolve) => {
       const clip = (s) => {
         const text = String(s ?? "").trim();
         return text.length > PROBE_OUTPUT_LIMIT ? `${text.slice(0, PROBE_OUTPUT_LIMIT)}
@@ -1513,21 +1781,21 @@ var VerifierRuntime = class {
       let settled = false;
       let child;
       try {
-        child = spawn(decision.file, decision.args, {
+        child = spawn2(spawnFile, spawnArgs, {
           cwd: workdir,
-          shell: decision.shell,
+          shell: spawnShell,
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,
           ...options.signal ? { signal: options.signal } : {}
         });
       } catch (err) {
-        resolve({ command: command2, exitCode: 1, stdout: "", stderr: clip(err.message), blocked: false, timedOut: false });
+        resolve({ command: command2, exitCode: 1, durationMs: Date.now() - startTime, stdout: "", stderr: clip(err.message), blocked: false, timedOut: false });
         return;
       }
       const timer = setTimeout(() => {
         timedOut = true;
         child.kill("SIGKILL");
-      }, this.timeoutMs);
+      }, effectiveTimeout);
       const collect = (which) => (chunk) => {
         if (which === "out") stdout += chunk;
         else stderr += chunk;
@@ -1550,10 +1818,12 @@ var VerifierRuntime = class {
         resolve({
           command: command2,
           exitCode: typeof exitCode === "number" ? exitCode : timedOut ? 124 : 1,
+          durationMs: Date.now() - startTime,
           stdout: clip(stdout),
           stderr: clip([stderr, notes].filter(Boolean).join("\n")),
           blocked: false,
           timedOut,
+          ...sandboxMode === "docker" ? { sandbox: "docker" } : {},
           ...aborted ? { aborted: true } : {},
           ...signal ? { signal: String(signal) } : {}
         });
@@ -1561,6 +1831,17 @@ var VerifierRuntime = class {
       child.on("error", (err) => finish(null, null, err));
       child.on("close", (code, signal) => finish(code, signal, null));
     });
+    if (options.skipSnapshot) {
+      return rawResult;
+    }
+    const afterSnap = await captureWorkspaceSnapshot(workdir);
+    const snapDiff = compareWorkspaceSnapshots(beforeSnap, afterSnap);
+    return {
+      ...rawResult,
+      workspace_snapshot: snapDiff.workspace_snapshot,
+      workspace_polluted: snapDiff.workspace_polluted,
+      ...snapDiff.polluted_entries ? { polluted_entries: snapDiff.polluted_entries } : {}
+    };
   }
   /**
    * Run a probe batch sequentially, honoring maxProbes and cancellation.
@@ -1585,6 +1866,66 @@ var VerifierRuntime = class {
       results.push(await this.runProbe(command2, workdir, options));
     }
     return results;
+  }
+  /**
+   * Replay all synthesized regression probes in `.rsi/probes/*.json` sequentially.
+   * Every probe is re-checked against `this.policy` (no allowlist exemption),
+   * with a default 60s timeout per probe. Failures, timeouts, or policy rejections
+   * are recorded in the report without aborting subsequent probes.
+   * @param {string} [workdir]
+   * @param {{timeoutMs?: number, sandbox?: 'host'|'docker', signal?: AbortSignal}} [options]
+   */
+  async runRegression(workdir = process.cwd(), options = {}) {
+    const probes = await loadRegressionProbes(workdir);
+    const beforeSnap = await captureWorkspaceSnapshot(workdir);
+    const timeoutMs = typeof options.timeoutMs === "number" && options.timeoutMs > 0 ? options.timeoutMs : REGRESSION_PROBE_TIMEOUT_MS;
+    const results = [];
+    let passed = 0;
+    let failed = 0;
+    let blocked = 0;
+    let timedOut = 0;
+    for (const probe of probes) {
+      if (options.signal?.aborted) break;
+      const execRes = await this.runProbe(probe.probeCommand, workdir, {
+        ...options,
+        timeoutMs
+      });
+      const isPass = !execRes.blocked && !execRes.timedOut && execRes.exitCode === probe.expectedExitCode;
+      if (isPass) passed++;
+      else failed++;
+      if (execRes.blocked) blocked++;
+      if (execRes.timedOut) timedOut++;
+      results.push({
+        memoryId: probe.memoryId,
+        title: probe.title,
+        target: probe.target,
+        probeCommand: probe.probeCommand,
+        expectedExitCode: probe.expectedExitCode,
+        exitCode: execRes.exitCode,
+        actualExitCode: execRes.exitCode,
+        durationMs: execRes.durationMs ?? 0,
+        passed: isPass,
+        blocked: execRes.blocked,
+        timedOut: execRes.timedOut,
+        stdout: execRes.stdout,
+        stderr: execRes.stderr,
+        workspace_snapshot: execRes.workspace_snapshot,
+        workspace_polluted: execRes.workspace_polluted
+      });
+    }
+    const afterSnap = await captureWorkspaceSnapshot(workdir);
+    const snapDiff = compareWorkspaceSnapshots(beforeSnap, afterSnap);
+    return {
+      total: probes.length,
+      passed,
+      failed,
+      blocked,
+      timedOut,
+      allPassed: failed === 0,
+      workspace_snapshot: snapDiff.workspace_snapshot,
+      workspace_polluted: snapDiff.workspace_polluted,
+      results
+    };
   }
   /** Build the double-blind Verifier system prompt. */
   buildVerifierPrompt(taskObjective, candidateContext = {}) {
@@ -1682,9 +2023,9 @@ ${p.stderr}
 var RECEIPTS_DIR = ".rsi/receipts";
 var CONSUMED_DIR = ".rsi/receipts/.consumed";
 var LAST_RECEIPT_FILE = ".rsi/.last_receipt";
-async function saveCachedReceipt(workdir = process.cwd(), { receipt, target, verdict, report, receiptId }) {
-  const receiptsDir = path3.join(workdir, RECEIPTS_DIR);
-  await fs3.mkdir(receiptsDir, { recursive: true });
+async function saveCachedReceipt(workdir = process.cwd(), { receipt, target, probe, verdict, report, receiptId, workspaceSnapshot, workspacePolluted }) {
+  const receiptsDir = path5.join(workdir, RECEIPTS_DIR);
+  await fs4.mkdir(receiptsDir, { recursive: true });
   let id = receiptId;
   if (!id && receipt && receipt.includes(".")) {
     try {
@@ -1696,41 +2037,44 @@ async function saveCachedReceipt(workdir = process.cwd(), { receipt, target, ver
   if (!id) {
     id = `rcpt_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
   }
-  const receiptPath = path3.join(receiptsDir, `${id}.json`);
+  const receiptPath = path5.join(receiptsDir, `${id}.json`);
   const record = {
     receipt_id: id,
     receipt,
     target: target || "",
+    probe: probe || "",
     verdict,
+    workspace_snapshot: workspaceSnapshot || "clean",
+    workspace_polluted: Boolean(workspacePolluted),
     created_at: Date.now(),
     report: report || ""
   };
-  await fs3.writeFile(receiptPath, JSON.stringify(record, null, 2), "utf-8");
-  const lastPath = path3.join(workdir, LAST_RECEIPT_FILE);
-  await fs3.writeFile(lastPath, id, "utf-8");
+  await fs4.writeFile(receiptPath, JSON.stringify(record, null, 2), "utf-8");
+  const lastPath = path5.join(workdir, LAST_RECEIPT_FILE);
+  await fs4.writeFile(lastPath, id, "utf-8");
   return { receiptId: id, path: receiptPath, record };
 }
 async function loadCachedReceipt(workdir = process.cwd(), receiptId) {
   let targetId = receiptId;
   if (!targetId) {
-    const lastPath = path3.join(workdir, LAST_RECEIPT_FILE);
+    const lastPath = path5.join(workdir, LAST_RECEIPT_FILE);
     try {
-      targetId = (await fs3.readFile(lastPath, "utf-8")).trim();
+      targetId = (await fs4.readFile(lastPath, "utf-8")).trim();
     } catch {
       return null;
     }
   }
-  const consumedPath = path3.join(workdir, CONSUMED_DIR, `${targetId}.json`);
+  const consumedPath = path5.join(workdir, CONSUMED_DIR, `${targetId}.json`);
   try {
-    const stat = await fs3.stat(consumedPath);
+    const stat = await fs4.stat(consumedPath);
     if (stat.isFile()) {
       return { consumed: true, receiptId: targetId };
     }
   } catch {
   }
-  const activePath = path3.join(workdir, RECEIPTS_DIR, `${targetId}.json`);
+  const activePath = path5.join(workdir, RECEIPTS_DIR, `${targetId}.json`);
   try {
-    const content = await fs3.readFile(activePath, "utf-8");
+    const content = await fs4.readFile(activePath, "utf-8");
     const data = JSON.parse(content);
     return { consumed: false, receiptId: targetId, data, path: activePath };
   } catch {
@@ -1738,32 +2082,32 @@ async function loadCachedReceipt(workdir = process.cwd(), receiptId) {
   }
 }
 async function consumeCachedReceipt(workdir = process.cwd(), receiptId) {
-  const activePath = path3.join(workdir, RECEIPTS_DIR, `${receiptId}.json`);
-  const consumedDir = path3.join(workdir, CONSUMED_DIR);
-  await fs3.mkdir(consumedDir, { recursive: true });
-  const consumedPath = path3.join(consumedDir, `${receiptId}.json`);
+  const activePath = path5.join(workdir, RECEIPTS_DIR, `${receiptId}.json`);
+  const consumedDir = path5.join(workdir, CONSUMED_DIR);
+  await fs4.mkdir(consumedDir, { recursive: true });
+  const consumedPath = path5.join(consumedDir, `${receiptId}.json`);
   try {
-    await fs3.rename(activePath, consumedPath);
+    await fs4.rename(activePath, consumedPath);
     return true;
   } catch {
     return false;
   }
 }
 async function gcReceipts(workdir = process.cwd(), maxAgeMs = 24 * 3600 * 1e3) {
-  const receiptsDir = path3.join(workdir, RECEIPTS_DIR);
+  const receiptsDir = path5.join(workdir, RECEIPTS_DIR);
   let cleaned = 0;
   try {
-    const files = await fs3.readdir(receiptsDir);
+    const files = await fs4.readdir(receiptsDir);
     const now = Date.now();
     for (const f of files) {
       if (!f.endsWith(".json")) continue;
-      const fullPath = path3.join(receiptsDir, f);
+      const fullPath = path5.join(receiptsDir, f);
       try {
-        const content = await fs3.readFile(fullPath, "utf-8");
+        const content = await fs4.readFile(fullPath, "utf-8");
         const data = JSON.parse(content);
         const age = now - (Number(data?.created_at) || 0);
         if (age > maxAgeMs) {
-          await fs3.unlink(fullPath);
+          await fs4.unlink(fullPath);
           cleaned++;
         }
       } catch {
@@ -1772,12 +2116,6 @@ async function gcReceipts(workdir = process.cwd(), maxAgeMs = 24 * 3600 * 1e3) {
   } catch {
   }
   return cleaned;
-}
-
-// lib/core/distillation.js
-function slugify(text, fallback = "lesson") {
-  const slug = String(text ?? "").toLowerCase().replace(/[^\p{Letter}\p{Number}_-]+/gu, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
-  return slug || fallback;
 }
 
 // lib/core/exploration.js
@@ -2251,11 +2589,16 @@ function parseArgs(args) {
   }
   return { flags: flags2, positional: positional2 };
 }
+for (const stream of [process.stdout, process.stderr]) {
+  stream?.on?.("error", (err) => {
+    if (err?.code === "EPIPE") process.exit(0);
+  });
+}
 var [, , command, ...rawArgs] = process.argv;
 var { flags, positional } = parseArgs(rawArgs);
 async function main() {
   const bank = new MemoryBank({ workspaceDir: process.cwd() });
-  const keyring = Keyring.for(path4.join(bank.globalDir, "..", ".integrity-key"));
+  const keyring = bank.keyring;
   switch (command) {
     case "status": {
       if (flags.gc) {
@@ -2272,16 +2615,18 @@ async function main() {
       const treeSha = await bank.computeTreeSha256();
       let activeReceipts = 0;
       try {
-        const rFiles = fs4.readdirSync(path4.join(process.cwd(), ".rsi", "receipts"));
+        const rFiles = fs5.readdirSync(path6.join(process.cwd(), ".rsi", "receipts"));
         activeReceipts = rFiles.filter((f) => f.endsWith(".json")).length;
       } catch {
       }
+      const probes = await loadRegressionProbes(process.cwd());
       console.log("=== RSIAgent DSH Memory Bank Status ===");
       console.log(`Global Memory Dir:    ${bank.globalDir}`);
       console.log(`Workspace Memory Dir: ${bank.workspaceDir || "(none)"}`);
       console.log(`Total Active Entries: ${all.length}`);
       console.log(`Tree SHA-256 Digest:  ${treeSha}`);
       console.log(`Cached Receipts:      ${activeReceipts}`);
+      console.log(`Regression Probes:    ${probes.length}`);
       break;
     }
     case "list": {
@@ -2290,8 +2635,8 @@ async function main() {
 === Durable Memory Entries (${all.length}) ===`);
       for (const entry of all) {
         const trustBadge = entry.trusted ? "trusted" : "\u26A0\uFE0F UNTRUSTED (unsigned)";
-        console.log(`- [${entry.id}] (${entry.category || "general"}) ${entry.title}`);
-        if (entry.tags?.length) console.log(`  Tags: ${entry.tags.join(", ")}`);
+        console.log(sanitizeGuidanceMarkers(`- [${entry.id}] (${entry.category || "general"}) ${entry.title}`));
+        if (entry.tags?.length) console.log(sanitizeGuidanceMarkers(`  Tags: ${entry.tags.join(", ")}`));
         console.log(`  Scope: ${entry.scope} | Trust: ${trustBadge} | Confidence: ${entry.confidence || "VERIFIED"} | Status: ${entry.status || "ACTIVE"} | Size: ${entry.size}B | Path: ${entry.filePath}`);
       }
       break;
@@ -2321,20 +2666,21 @@ async function main() {
       } else {
         const matches = await bank.search({ query: taskQuery, topK });
         if (matches.length === 0) {
-          console.log(`No prior verified lessons matching "${taskQuery}".`);
+          console.log(sanitizeGuidanceMarkers(`No prior verified lessons matching "${taskQuery}".`));
         } else {
-          console.log(`Top ${matches.length} relevant memories for: "${taskQuery}":
-`);
+          console.log(sanitizeGuidanceMarkers(`Top ${matches.length} relevant memories for: "${taskQuery}":
+`));
           for (const m of matches) {
             const fields = extractMemoryFields(m);
-            console.log(`- [${m.id}] ${m.title} (score: ${m._score ? m._score.toFixed(3) : "N/A"}, confidence: ${m.confidence || "VERIFIED"})`);
-            if (fields.preconditions) console.log(`  Preconditions: ${fields.preconditions}`);
-            if (fields.provenRule) console.log(`  Proven Rule:   ${fields.provenRule}`);
-            if (m.tags?.length) console.log(`  Tags:          ${m.tags.join(", ")}`);
+            console.log(sanitizeGuidanceMarkers(`- [${m.id}] ${m.title} (score: ${m._score ? m._score.toFixed(3) : "N/A"}, confidence: ${m.confidence || "VERIFIED"})`));
+            if (fields.preconditions) console.log(sanitizeGuidanceMarkers(`  Preconditions: ${fields.preconditions}`));
+            if (fields.provenRule) console.log(sanitizeGuidanceMarkers(`  Proven Rule:   ${fields.provenRule}`));
+            if (m.tags?.length) console.log(sanitizeGuidanceMarkers(`  Tags:          ${m.tags.join(", ")}`));
             console.log("");
           }
         }
       }
+      console.log("\n" + renderCliGuidance({ step: "context" }));
       break;
     }
     case "query": {
@@ -2342,22 +2688,24 @@ async function main() {
       const tags = flags.tags ? String(flags.tags).split(",").map((s) => s.trim()) : [];
       const topK = flags["top-k"] || flags.topK ? parseInt(flags["top-k"] || flags.topK, 10) : void 0;
       const matches = await bank.search({ query: q, tags, topK });
-      console.log(`
-=== Query Matches for "${q}" (${matches.length}) ===`);
+      console.log(sanitizeGuidanceMarkers(`
+=== Query Matches for "${q}" (${matches.length}) ===`));
       for (const m of matches) {
-        console.log(`
---- [${m.id}] ${m.title} (score: ${m._score ? m._score.toFixed(3) : "N/A"}, confidence: ${m.confidence || "VERIFIED"}) ---`);
-        console.log(m.content);
+        console.log(sanitizeGuidanceMarkers(`
+--- [${m.id}] ${m.title} (score: ${m._score ? m._score.toFixed(3) : "N/A"}, confidence: ${m.confidence || "VERIFIED"}) ---`));
+        console.log(sanitizeGuidanceMarkers(m.content));
       }
+      console.log("\n" + renderCliGuidance({ step: "query" }));
       break;
     }
     case "verify": {
       const target = flags.target;
       const probe = flags.probe;
       const memoryIds = flags["memory-ids"] || flags.memoryIds;
+      const sandbox = flags.sandbox || "host";
       if (target && probe) {
-        const runtime2 = new VerifierRuntime();
-        const probeRes = await runtime2.runProbe(probe, process.cwd());
+        const runtime2 = new VerifierRuntime({ sandbox });
+        const probeRes = await runtime2.runProbe(probe, process.cwd(), { sandbox });
         let reportText;
         const isPass = probeRes.exitCode === 0 && !probeRes.blocked;
         if (isPass) {
@@ -2365,6 +2713,7 @@ async function main() {
             "FINDINGS: Read-only probe executed successfully.",
             `COMMAND: ${probe}`,
             `EXIT_CODE: ${probeRes.exitCode}`,
+            `WORKSPACE_SNAPSHOT: ${probeRes.workspace_snapshot}`,
             probeRes.stdout ? `STDOUT:
 ${probeRes.stdout}` : "",
             "DOUBTS: None",
@@ -2375,6 +2724,7 @@ ${probeRes.stdout}` : "",
             "FINDINGS: Read-only probe failed or was blocked.",
             `COMMAND: ${probe}`,
             `EXIT_CODE: ${probeRes.exitCode}`,
+            `WORKSPACE_SNAPSHOT: ${probeRes.workspace_snapshot}`,
             probeRes.stderr ? `STDERR:
 ${probeRes.stderr}` : "",
             "DOUBTS: Probe failure observed",
@@ -2387,49 +2737,49 @@ ${probeRes.stderr}` : "",
           verdict: parsed.verdict,
           report: reportText,
           target,
-          receiptId
+          receiptId,
+          workspaceSnapshot: probeRes.workspace_snapshot,
+          workspacePolluted: probeRes.workspace_polluted
         });
         await saveCachedReceipt(process.cwd(), {
           receipt,
           target,
+          probe,
           verdict: parsed.verdict,
           report: reportText,
-          receiptId
+          receiptId,
+          workspace_snapshot: probeRes.workspace_snapshot,
+          workspace_polluted: probeRes.workspace_polluted
         });
         if (memoryIds) {
           await bank.recordAdoption(memoryIds, { isPass: parsed.isPass });
         }
         console.log("=== Verifier Execution Output ===\n");
-        console.log(`Target:    ${target}`);
-        console.log(`Probe:     ${probe}`);
-        console.log(`Exit Code: ${probeRes.exitCode}`);
-        console.log(`Verdict:   ${parsed.verdict}`);
-        console.log(`Doubts:    ${parsed.doubts}`);
-        console.log(`Receipt:   ${receiptId}
-`);
-        console.log(receipt);
-        console.log("\n---RSI-GUIDANCE-BEGIN---");
-        console.log(`Receipt: ${receiptId} (${parsed.verdict})`);
-        if (parsed.isPass) {
-          console.log(`Next Action: Execute distill to persist verified lesson:`);
-          console.log(`  rsi distill --target "${target}" --title "<title>" --preconditions "<pre>" --rule "<rule>" --evidence "<ev>"`);
-        } else {
-          console.log(`Next Action: Execute practice to generate deliberate practice loop:`);
-          console.log(`  rsi practice --target "${target}" --failure "<reason>" --probe "${probe}"`);
+        console.log(sanitizeGuidanceMarkers(`Target:             ${target}`));
+        console.log(sanitizeGuidanceMarkers(`Probe:              ${probe}`));
+        console.log(`Exit Code:          ${probeRes.exitCode}`);
+        console.log(`Verdict:            ${parsed.verdict}`);
+        console.log(sanitizeGuidanceMarkers(`Doubts:             ${parsed.doubts}`));
+        console.log(`Workspace Snapshot: ${probeRes.workspace_snapshot}`);
+        if (probeRes.workspace_polluted) {
+          console.log(`Workspace Polluted: true`);
         }
-        console.log("---RSI-GUIDANCE-END---");
+        console.log(`Receipt:            ${receiptId}
+`);
+        console.log(sanitizeGuidanceMarkers(receipt));
+        console.log("\n" + renderCliGuidance({ step: "verify", receiptId, verdict: parsed.verdict }));
         break;
       }
       const objective = positional.join(" ");
       if (!objective) {
-        console.error('Usage: rsi verify --target "<file>" --probe "<command>" [--memory-ids "<ids>"]');
+        console.error('Usage: rsi verify --target "<file>" --probe "<command>" [--memory-ids "<ids>"] [--sandbox host|docker]');
         console.error('   or: rsi verify "<task objective>"');
         process.exit(1);
       }
       const runtime = new VerifierRuntime();
       const prompt = runtime.buildVerifierPrompt(objective);
       console.log("=== Generated Double-Blind Verifier Prompt ===\n");
-      console.log(prompt);
+      console.log(sanitizeGuidanceMarkers(prompt));
       break;
     }
     case "distill": {
@@ -2464,7 +2814,8 @@ ${probeRes.stderr}` : "",
         console.error(`Error: Verification receipt validation failed: ${check.reason}`);
         process.exit(1);
       }
-      const content = [
+      const verifyCommand = flags["verify-command"] || flags.verifyCommand || flags.probe || receiptRecord.data.probe || "";
+      const contentParts = [
         "### Preconditions & Context",
         preconditions || "N/A",
         "",
@@ -2476,7 +2827,11 @@ ${probeRes.stderr}` : "",
         "",
         "### Evidence",
         evidence || "Verified through double-blind probe"
-      ].join("\n");
+      ];
+      if (verifyCommand) {
+        contentParts.push("", "### Re-check Command", `\`${verifyCommand}\``);
+      }
+      const content = contentParts.join("\n");
       const isPass = check.verdict === "PASS";
       const newEntry = {
         id: slugify(title),
@@ -2487,6 +2842,8 @@ ${probeRes.stderr}` : "",
         confidence: isPass ? "VERIFIED" : "OBSERVED",
         status: "ACTIVE",
         last_validated_at: (/* @__PURE__ */ new Date()).toISOString(),
+        target,
+        verifyCommand,
         content: content.trim()
       };
       const reconciler = new MemoryReconciler();
@@ -2494,7 +2851,42 @@ ${probeRes.stderr}` : "",
       await consumeCachedReceipt(process.cwd(), receiptRecord.receiptId);
       console.log(`\u2705 Distilled and committed memory entry [${newEntry.id}]`);
       console.log(`Path: ${res.committed.path}`);
+      if (res.synthesizedProbe) {
+        console.log(`Synthesized Probe: ${res.synthesizedProbe.probePath}`);
+      }
       console.log(`Receipt [${receiptRecord.receiptId}] consumed and archived.`);
+      console.log("\n" + renderCliGuidance({ step: "distill", receiptId: receiptRecord.receiptId }));
+      break;
+    }
+    case "regression": {
+      const sandbox = flags.sandbox || "host";
+      const runtime = new VerifierRuntime({ sandbox });
+      const report = await runtime.runRegression(process.cwd(), { sandbox });
+      console.log("=== RSIAgent Regression Probe Suite ===\n");
+      console.log(`Total Probes:       ${report.total}`);
+      console.log(`Passed:             ${report.passed}`);
+      console.log(`Failed:             ${report.failed}`);
+      console.log(`Blocked (Policy):   ${report.blocked}`);
+      console.log(`Timed Out:          ${report.timedOut}`);
+      console.log(`Workspace Snapshot: ${report.workspace_snapshot}`);
+      console.log(`Workspace Polluted: ${report.workspace_polluted}
+`);
+      if (report.results.length === 0) {
+        console.log("No regression probes found in .rsi/probes/.");
+      } else {
+        for (const r of report.results) {
+          const badge = r.passed ? "PASS" : r.blocked ? "BLOCKED" : r.timedOut ? "TIMEOUT" : "FAIL";
+          const exitCode = r.exitCode ?? r.actualExitCode;
+          console.log(sanitizeGuidanceMarkers(`- [${badge}] ${r.memoryId}: ${r.probeCommand || "(invalid)"} (exit=${exitCode}, ${r.durationMs ?? 0}ms)`));
+          if (!r.passed && r.stderr) {
+            console.log(sanitizeGuidanceMarkers(`  Reason: ${r.stderr.trim().split("\n")[0]}`));
+          }
+        }
+      }
+      console.log("\n" + renderCliGuidance({ step: "regression" }));
+      if (!report.allPassed) {
+        process.exit(1);
+      }
       break;
     }
     case "explore": {
@@ -2510,15 +2902,16 @@ ${probeRes.stderr}` : "",
       const probe = flags.probe;
       if (target || failure || probe) {
         console.log("=== RSIAgent Phase 2 Deliberate Practice Plan ===\n");
-        console.log(`Target:  ${target || "(current workspace)"}`);
-        console.log(`Failure: ${failure || "Unspecified failure"}`);
-        console.log(`Probe:   ${probe || "N/A"}
-`);
+        console.log(sanitizeGuidanceMarkers(`Target:  ${target || "(current workspace)"}`));
+        console.log(sanitizeGuidanceMarkers(`Failure: ${failure || "Unspecified failure"}`));
+        console.log(sanitizeGuidanceMarkers(`Probe:   ${probe || "N/A"}
+`));
         console.log("Execution State Machine:");
         console.log("1. [Diagnostic Analysis]: Isolate root cause from error evidence without editing.");
         console.log("2. [Targeted Fix]: Apply minimal structural fix.");
-        console.log(`3. [Falsification Probe]: Run probe: "${probe || "npm test"}"`);
-        console.log("4. [Distillation]: On PASS, run distill; on FAIL, iterate practice loop.\n");
+        console.log(sanitizeGuidanceMarkers(`3. [Falsification Probe]: Run probe: "${probe || "npm test"}"`));
+        console.log("4. [Distillation]: On PASS, run distill; on FAIL, iterate practice loop.");
+        console.log("\n" + renderCliGuidance({ step: "practice" }));
         break;
       }
       const objective = positional.join(" ");
@@ -2533,21 +2926,21 @@ ${probeRes.stderr}` : "",
     }
     case "skill":
     case "install-skill": {
-      const __dirname = path4.dirname(fileURLToPath(import.meta.url));
-      const srcDir = path4.resolve(__dirname, "..", "skills", "rsi");
-      const targetDir = path4.join(os3.homedir(), ".agents", "skills", "rsi");
+      const __dirname = path6.dirname(fileURLToPath(import.meta.url));
+      const srcDir = path6.resolve(__dirname, "..", "skills", "rsi");
+      const targetDir = path6.join(os3.homedir(), ".agents", "skills", "rsi");
       if (flags.print || flags.p || positional[0] === "--print" || positional[0] === "-p") {
-        const skillPath = path4.join(srcDir, "SKILL.md");
-        if (fs4.existsSync(skillPath)) {
-          console.log(fs4.readFileSync(skillPath, "utf8"));
+        const skillPath = path6.join(srcDir, "SKILL.md");
+        if (fs5.existsSync(skillPath)) {
+          console.log(fs5.readFileSync(skillPath, "utf8"));
         } else {
           console.error("SKILL.md not found at " + skillPath);
         }
         break;
       }
       try {
-        fs4.mkdirSync(path4.dirname(targetDir), { recursive: true });
-        fs4.cpSync(srcDir, targetDir, { recursive: true });
+        fs5.mkdirSync(path6.dirname(targetDir), { recursive: true });
+        fs5.cpSync(srcDir, targetDir, { recursive: true });
         console.log(`\u2705 RSI Skill successfully installed to: ${targetDir}`);
       } catch (err) {
         console.error(`Failed to install skill to ${targetDir}: ${err.message}`);
@@ -2565,7 +2958,7 @@ ${probeRes.stderr}` : "",
     }
     default: {
       console.log(`
-RSIAgent (DSH) \u2014 Recursive Self-Improvement CLI Tool (v0.3.0)
+RSIAgent (DSH) \u2014 Recursive Self-Improvement CLI Tool (v0.4.0)
 
 Usage:
   rsi status [--gc] [--migrate]          Show bank status, run receipt GC or schema migration
@@ -2573,10 +2966,11 @@ Usage:
   rsi trust <id>                         Sign and trust an unsigned workspace memory entry
   rsi context --task "<objective>"       Display Epistemic Core and dynamic Top-K memory recall
   rsi query "<text>" [--tags a,b]        Search memory bank using BM25F ranking
-  rsi verify --target "<file>" --probe "<cmd>" [--memory-ids "<ids>"]
+  rsi verify --target "<file>" --probe "<cmd>" [--memory-ids "<ids>"] [--sandbox host|docker]
                                          Execute safe probe and issue cached verification receipt
   rsi distill --target "<file>" --title "<title>" --rule "<rule>" --evidence "<ev>"
-                                         Distill causal lesson bound to cached verification receipt
+                                         Distill causal lesson and synthesize regression probe
+  rsi regression [--sandbox host|docker] Replay all synthesized regression probes in .rsi/probes/
   rsi explore [--goal "<objective>"]     Emit Phase 1 broad-exploration workflow request
   rsi practice [--target "<file>" --failure "<err>" --probe "<cmd>"]
                                          Emit Phase 2 deliberate practice workflow

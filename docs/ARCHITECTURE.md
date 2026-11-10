@@ -1,150 +1,78 @@
-# Architecture & Design Rationale
+# dsh-rsi Architecture and Verification Report (v0.4.0)
 
-This document details the architectural mapping from the academic **RSIAgent** framework to the industrial **DeepSeek Harness (DSH)** plugin runtime.
+## 1. One-Core Dual-Dispatch Architecture
 
----
+`dsh-rsi` implements the RSIAgent framework (arXiv:2609.15364) using a zero-external-dependency core (`lib/core/`) that powers two distribution surfaces:
 
-## 1. The Core Philosophy: Training-Free Self-Improvement
+1. **DSH Native Plugin Mode (`lib/index.js`)**:
+   - Mounts onto the Cordis IoC runtime (`prompt`, `tool`, `agent`, `workflowEngine`).
+   - Registers six native tools (`rsi_query_memory`, `rsi_verify`, `rsi_distill_memory`, `rsi_reconcile_memory`, `rsi_explore`, `rsi_practice`) and four prompt fragments (`epistemic-core`, `rsi-protocol`, `memory-preamble`, `verifier-blind`).
+   - Spawns isolated sub-agents (`agent.createSession` with `history: []`) for zero-history double-blind verification.
 
-In traditional machine learning, model improvement requires updating neural network parameters $\theta \to \theta'$. In complex digital environments, gradient-based updates suffer from sample inefficiency, distribution shifts, and high compute overhead.
-
-RSIAgent formalizes agent execution as:
-$$a_t \sim \pi_\theta(\cdot \mid q, h_t, M)$$
-
-Where:
-- $\pi_\theta$: Frozen foundation model parameters.
-- $q$: Task objective.
-- $h_t$: Ephemeral interaction history (reset between tasks).
-- $M$: **Durable evolvable memory** (persisted across tasks).
-
-The goal of `dsh-rsi` is to provide the algorithmic and structural runtime that allows $M$ to safely accumulate, self-verify, and reconcile without human intervention.
+2. **Standalone Single-Skill Mode (`skills/rsi/`)**:
+   - Bundles `bin/rsi.mjs` and `lib/core/*` via `esbuild` into a single zero-dependency executable (`skills/rsi/scripts/rsi-cli.mjs` and `skills/rsi/scripts/rsi-cli.js`, ~120 KB unminified for source auditability, ~28 KB compressed inside `skills/rsi.zip`).
+   - Allows any agent environment with `Bash` and `Node.js >= 20` (Claude Code, Cursor, Windsurf, OpenHands, Cline, Roo Code) to execute the full self-evolution closed loop (`context -> verify -> distill -> practice -> regression`) without an MCP server or plugin host.
+   - **Workspace-Write Sandbox Resilience**: In restricted agent sandboxes where `~/.dsh/storages/rsi/memory` exists on disk (so `mkdir` succeeds) but creating files inside it returns `EPERM`/`EACCES`, `MemoryBank.withLock(fn, scope)` locks only the active target scope directory (`.rsi/memory` for `workspace` commits), and both `acquireFileLock` and `save` gracefully degrade to workspace-only mode while preserving read access to global memories.
 
 ---
 
-## 2. Epistemic Independence & Verification
+## 2. Cordis Session Completion Hook Audit and Dual-End Gatekeeping
 
-### The "False-Done" Problem
-A major finding in agent failure audits is **semantic entanglement**: when an actor evaluates its own work, it inevitably uses the same flawed assumptions that caused the error in the first place.
+### 2.1 Audit Conclusion on Cordis Completion Lifecycle Hooks
 
-### The Double-Blind Solution
-In `dsh-rsi`, verification strictly adheres to:
-1. **Zero-History Context**: The Verifier never receives the Actor's reasoning traces, self-checks, or scratchpad.
-2. **Read-Only Discipline & Shell-Free Allowlist**: Probes are tokenized into `argv` without a shell (rejecting pipes, redirection, command chaining, and command substitution) and checked against an explicit program and argument allowlist (`ProbePolicy` in `probe-policy.js`) before execution via `spawn(..., { shell: false })`.
-3. **Cryptographic Verification Receipts & Workspace Trust**: When `rsi_verify` parses an audit report, it issues an HMAC-signed `verification_receipt` (`integrity.js`). `rsi_distill_memory` marks a lesson as `verified: true` only when presented with a valid receipt. Furthermore, workspace memory files written by the plugin are HMAC-signed with a per-user secret stored outside the repository (`~/.dsh/storages/rsi/.integrity-key`); unsigned files in a cloned repository's `.rsi/memory/` are treated as untrusted and excluded from system-prompt injection and default queries.
-4. **Doubt Invariant**: `VERDICT: PASS` requires an explicit, affirmative attestation in `DOUBTS:` (e.g., `None` or `无`). Any unresolved material doubt triggers an automatic downgrade to `FAIL`. Following Epistemic axiom E4 (*Silence proves nothing*), an omitted or blank `DOUBTS:` section is treated as absence of proof and automatically downgraded to `FAIL`.
+During Milestone 3 (v0.4.0), we audited the Cordis lifecycle surface exposed to DSH plugins (`ctx.effect`, `ctx.on`, `ctx.prompt`, `ctx.tool`):
 
----
+- **Finding**: Cordis provides event dispatch via `ctx.on(eventName, listener)` when the host runtime exposes lifecycle events such as `session:finish`, `agent:before-finish`, or `turn:end`. However, standard DSH presets do not guarantee a synchronous blocking `beforeSessionFinish` hook across all host adapters; in minimal presets (`standard` without full event bus hooks), `ctx.on` may either be absent or non-blocking.
+- **Architectural Resolution (Dual-Defense Gatekeeping)**:
+  1. **Event Hook Interception (`ctx.on('session:finish', ...)` in `lib/index.js`)**: When the host exposes `ctx.on`, `dsh-rsi` registers a `session:finish` listener backed by `SessionGatekeeper`. If the session has unverified state (`dirty: true` without a `PASS` `verification_receipt`), the listener returns `{ allowed: false, block: true, reason, reminder }` and attaches `event.gatekeeperWarning` to intercept premature completion.
+  2. **Prompt-Fragment & Tool Output Fallback (`dsh-rsi:rsi-protocol` & `---RSI-GUIDANCE---`)**: For hosts where `session:finish` is non-blocking or unavailable, `SessionGatekeeper.evaluate()` dynamically injects an explicit `[GATEKEEPER WARNING]` into the `dsh-rsi:rsi-protocol` prompt fragment whenever `gatekeeper.dirty` is active, and CLI subcommands append a deterministic `---RSI-GUIDANCE-BEGIN--- / ---RSI-GUIDANCE-END---` state-machine block at the end of every command output.
 
-## 3. Causal Distillation vs. Mere Logging
+### 2.2 Prompt Injection Guard on CLI Guidance Blocks
 
-A common pitfall of naive memory systems is storing raw logs or trivial summaries. In `dsh-rsi`, distillation requires:
-- **Preconditions**: Under what exact operating system, library version, or task type does this apply?
-- **Actionable Procedure**: The exact verified syntax, flag, or script pattern.
-- **Failure Mechanism**: Why did the intuitive approach fail?
-- **Concrete Evidence**: Specific error messages or exit codes.
+Because `.rsi/memory/*.md` and `.rsi/probes/*.json` are stored in the workspace and may originate from untrusted repositories (e.g., via `git clone`), rendering dynamic fields inside `---RSI-GUIDANCE-BEGIN---` / `---RSI-GUIDANCE-END---` could enable Indirect Prompt Injection.
+
+`lib/core/verifier.js` enforces two strict invariants:
+1. **Marker Stripping (`sanitizeGuidanceMarkers`)**: Any occurrences of `---RSI-GUIDANCE-BEGIN---` or `---RSI-GUIDANCE-END---` inside memory titles, bodies, target strings, or probe outputs are stripped (`---[SANITIZED-RSI-MARKER]---`) before printing to `stdout`.
+2. **Zero Dynamic Interpolation (`renderCliGuidance`)**: The guidance block itself contains **only** static template instructions, a regex-sanitized `receiptId` (`[A-Za-z0-9_.-]`), and a strict enum `verdict` (`PASS | FAIL | INCONCLUSIVE`). Dynamic values (`target`, `probe`, `title`, `rule`, `failure`) are never interpolated inside the guidance block.
 
 ---
 
-## 4. Cross-Corpus Reconciliation
+## 3. Regression Probe Synthesis and Replay Security Model
 
-As memory grows, agents risk preserving contradictory advice (e.g., one rule advocating `--bail`, another warning that `--bail` suppresses vital error streams).
+### 3.1 Automatic Probe Synthesis (`.rsi/probes/<memory_id>.json`)
 
-`MemoryReconciler` implements:
-- **Exact ID in-place update**: When `newEntry.id === oldEntry.id`, re-audited or revised rules update in-place without duplicating.
-- **Guarded same-topic evolution supersession**: When the full un-truncated normalized title matches (`normalizeTitle(newEntry.title) === normalizeTitle(oldEntry.title)`), titles are non-generic, categories match, and content overlap exceeds threshold (>35%), the old rule is recognized as an evolved version and annotated as `SUPERSEDED`. Low-overlap rules, generic titles (e.g. `Untitled lesson`), and distinct long titles are preserved without false-positive deprecation.
-- **Semantic polarity contradiction**: For distinct topics with high Jaccard overlap (>35%), negation pattern analysis detects opposing directives (e.g., `always` vs `never`, `required` vs `optional/prohibited`) and supersedes the older rule.
-- **Related topic non-destructive merge**: Overlapping entries without direct contradictions are cataloged as `related_topic` without deprecating either rule.
-- **Scope preservation**: Superseded annotations preserve the rule's originating storage scope (`workspace` vs `global`).
+Whenever a `VERIFIED` memory entry carrying a `verifyCommand` (or a `### Re-check Command` section, or a `probe` bound to a consumed `PASS` receipt) is committed to a workspace-backed `MemoryBank` via `MemoryReconciler.reconcileAndCommit`, `synthesizeRegressionProbe` automatically writes `.rsi/probes/<memory_id>.json`:
 
----
-
-## 5. DSH / Cordis Lifecycle Integration
-
-```text
-[DSH Boot / Profile Load]
-          │
-          ├──> Mount Prompt Sections:
-          │      - epistemic-core (E1-E6 rules, order 3100)
-          │      - memory-inventory (scanned from ~/.dsh/storages/rsi and .rsi, order 3110)
-          │      - rsi-protocol (explicit recall/verify/distill/reconcile/explore/practice instructions, order 3120)
-          │
-          └──> Mount Tool Handlers:
-                 - rsi_verify
-                 - rsi_distill_memory
-                 - rsi_reconcile_memory
-                 - rsi_query_memory
-                 - rsi_explore  (Phase 1 Broad Exploration)
-                 - rsi_practice (Phase 2 Deep Practice State Machine)
+```json
+{
+  "memoryId": "always-check-null-input",
+  "target": "src/parser.js",
+  "probeCommand": "node --test tests/parser.test.mjs",
+  "expectedExitCode": 0,
+  "createdAt": "2026-11-10T00:00:00.000Z"
+}
 ```
 
-When a user task begins, the agent is already primed with ground-truth discipline and the current memory inventory. When a task completes, the agent invokes verification and memory tools to commit newly learned experience.
+### 3.2 Mandatory Replay Safety Invariants
 
-### Cordis Preset Delegation Isolation & Service Resolution
-DSH isolates `workflowEngine` inside the Agent preset's `delegation` group (`cordis.yml` with `isolate: { workflowEngine: true }`). Top-level plugin contexts cannot resolve this isolated symbol directly through `ctx.get('workflowEngine')`.
-To bridge this boundary, `dsh-rsi` resolves the engine through:
-```javascript
-const presets = service(agent.ctx, 'agentPresets') ?? service(ctx, 'agentPresets');
-const engine = presets?.serviceFor?.(agent, 'workflowEngine')
-  ?? service(agent.ctx, 'workflowEngine')
-  ?? service(ctx, 'workflowEngine');
-```
-When running under presets where `workflowEngine` is disabled (such as the default `standard` desktop preset), the tools gracefully fall back to `status: 'workflow_script'` mode with complete runnable scripts.
+Executing `rsi regression` (CLI) or `rsi_verify({ run_regression: true })` (DSH Tool) replays all probes in `.rsi/probes/*.json` under `VerifierRuntime.runRegression(workdir, options)`:
+- **Secondary Allowlist Enforcement**: Every `.rsi/probes/<id>.json` file is treated as untrusted input on disk. Before execution, `runProbe` re-validates `probeCommand` against `validateProbeCommand` (`probe-policy.js`). Any probe containing disallowed binaries, shell operators (`;`, `&&`, `||`, `|`, `` ` ``, `$()`), or dangerous flags (`node -e`, `git -c`, `python -c`) is rejected (`blocked: true`) and recorded in the regression report without spawning a process.
+- **Sequential Execution & Bounded Timeout**: Probes execute sequentially with a default per-probe timeout of `REGRESSION_PROBE_TIMEOUT_MS = 60000` (60 seconds). A timeout or failure in one probe is recorded in `results[]` and does not abort the remaining probes.
 
 ---
 
-## 6. Phase 1: Parallel-Wave Broad Self-Exploration (`rsi_explore`)
+## 4. Workspace Snapshot Guard and Optional Docker Escape Hatch
 
-When an agent enters a new codebase or environment, exploring sequentially in a single turn is token-inefficient and prone to early hallucination. `ExplorationPlanner` generates a DSH workflow script that coordinates parallel subagents:
+### 4.1 Workspace Snapshot Guard (`captureWorkspaceSnapshot` / `compareWorkspaceSnapshots`)
 
-```text
-[Wave 1: Parallel Survey by Facet]
-  ├── Facet: build-and-run
-  ├── Facet: test-suite
-  ├── Facet: toolchain & deps
-  ├── Facet: architecture & conventions
-  └── Facet: failure-modes & pitfalls
-          │
-          ▼
-   (Collect candidate lessons & deduplicate follow-up questions)
-          │
-          ▼
-[Wave 2: Deep Probes on Follow-Ups]
-  ├── Probe 1: Edge cases & flag verification
-  └── Probe 2: Flaky test root-causes
-          │
-          ▼
-[Double-Blind Audit Pipeline]
-  └── Independent Verifier tests each candidate lesson with read-only probes
-          │
-          ▼ (Only PASS without doubts accepted)
-[Memory Reconciliation & Persistence]
-```
+To prevent verification probes from silently mutating the repository (violating E3 read-only verification), `VerifierRuntime.runProbe` captures `git status --porcelain` before and after probe execution:
 
----
+- **Clean Git Workspace (`workspace_snapshot: 'clean'`, `workspace_polluted: false`)**: The working tree status before and after the probe is identical.
+- **Polluted Git Workspace (`workspace_snapshot: 'dirty'`, `workspace_polluted: true`)**: The probe modified tracked files or left untracked files behind. Both the probe result and the cryptographic `verification_receipt` embed `wp: true` and `ws: "dirty"`.
+- **Non-Git Directory Fallback (`workspace_snapshot: 'skipped_non_git'`, `workspace_polluted: false`)**: When `workdir` is not inside a Git work tree (or `git` is unavailable), snapshot comparison is skipped and recorded honestly as `'skipped_non_git'` (never falsified as `'clean'`).
 
-## 7. Phase 2: Failure-Driven Deep Practice (`rsi_practice`)
+### 4.2 Optional Docker Read-Only Container Escape Hatch (`--sandbox=docker`)
 
-For challenging tasks where initial attempts fail, RSIAgent applies a closed-loop state machine:
-
-```text
-  ATTEMPT
-     │
-     ▼ (attempted)
-  VERIFY ───[pass (clean)]───► DISTILL_SUCCESS ──► DONE
-     │
-   [fail]
-     │
-     ▼
-  DISTILL_FAILURE ───[budget exhausted]───► EXHAUSTED
-     │ (distilled)
-     ▼
-  PRACTICE (isolated scratch experiment confirming the rule)
-     │
-     ▼ (practiced)
-  RETRY ──(retry)──► ATTEMPT (seeded with refined procedure)
-```
-
-Key invariants:
-- **Zero-leaking Verifier**: The verifier only receives the task objective and declared deliverable paths.
-- **Deliberate Practice**: Before attempting the full task again, the agent conducts an isolated test in a temporary directory to validate the corrective rule.
-- **Full Traceability**: All state transitions (`transitions`) are recorded and auditable.
+For environments requiring OS-level filesystem isolation beyond command allowlisting, `VerifierRuntime` supports `sandbox: 'docker'` (`rsi verify --sandbox=docker` or `rsi regression --sandbox=docker`):
+- Mounts the workspace read-only (`--read-only -v <workdir>:/workspace:ro --tmpfs /tmp --workdir /workspace`).
+- **Invariant**: Even when `sandbox: 'docker'` is enabled, `validateProbeCommand` allowlist checks are still enforced prior to spawning `docker run`.

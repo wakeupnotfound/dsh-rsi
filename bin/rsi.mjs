@@ -22,7 +22,10 @@ import {
   saveCachedReceipt,
   loadCachedReceipt,
   consumeCachedReceipt,
-  gcReceipts
+  gcReceipts,
+  loadRegressionProbes,
+  sanitizeGuidanceMarkers,
+  renderCliGuidance
 } from '../lib/core/index.js';
 
 function parseArgs(args) {
@@ -55,12 +58,18 @@ function parseArgs(args) {
   return { flags, positional };
 }
 
+for (const stream of [process.stdout, process.stderr]) {
+  stream?.on?.('error', (err) => {
+    if (err?.code === 'EPIPE') process.exit(0);
+  });
+}
+
 const [,, command, ...rawArgs] = process.argv;
 const { flags, positional } = parseArgs(rawArgs);
 
 async function main() {
   const bank = new MemoryBank({ workspaceDir: process.cwd() });
-  const keyring = Keyring.for(path.join(bank.globalDir, '..', '.integrity-key'));
+  const keyring = bank.keyring;
 
   switch (command) {
     case 'status': {
@@ -83,6 +92,7 @@ async function main() {
         const rFiles = fs.readdirSync(path.join(process.cwd(), '.rsi', 'receipts'));
         activeReceipts = rFiles.filter(f => f.endsWith('.json')).length;
       } catch {}
+      const probes = await loadRegressionProbes(process.cwd());
 
       console.log('=== RSIAgent DSH Memory Bank Status ===');
       console.log(`Global Memory Dir:    ${bank.globalDir}`);
@@ -90,6 +100,7 @@ async function main() {
       console.log(`Total Active Entries: ${all.length}`);
       console.log(`Tree SHA-256 Digest:  ${treeSha}`);
       console.log(`Cached Receipts:      ${activeReceipts}`);
+      console.log(`Regression Probes:    ${probes.length}`);
       break;
     }
 
@@ -98,8 +109,8 @@ async function main() {
       console.log(`\n=== Durable Memory Entries (${all.length}) ===`);
       for (const entry of all) {
         const trustBadge = entry.trusted ? 'trusted' : '⚠️ UNTRUSTED (unsigned)';
-        console.log(`- [${entry.id}] (${entry.category || 'general'}) ${entry.title}`);
-        if (entry.tags?.length) console.log(`  Tags: ${entry.tags.join(', ')}`);
+        console.log(sanitizeGuidanceMarkers(`- [${entry.id}] (${entry.category || 'general'}) ${entry.title}`));
+        if (entry.tags?.length) console.log(sanitizeGuidanceMarkers(`  Tags: ${entry.tags.join(', ')}`));
         console.log(`  Scope: ${entry.scope} | Trust: ${trustBadge} | Confidence: ${entry.confidence || 'VERIFIED'} | Status: ${entry.status || 'ACTIVE'} | Size: ${entry.size}B | Path: ${entry.filePath}`);
       }
       break;
@@ -132,19 +143,20 @@ async function main() {
       } else {
         const matches = await bank.search({ query: taskQuery, topK });
         if (matches.length === 0) {
-          console.log(`No prior verified lessons matching "${taskQuery}".`);
+          console.log(sanitizeGuidanceMarkers(`No prior verified lessons matching "${taskQuery}".`));
         } else {
-          console.log(`Top ${matches.length} relevant memories for: "${taskQuery}":\n`);
+          console.log(sanitizeGuidanceMarkers(`Top ${matches.length} relevant memories for: "${taskQuery}":\n`));
           for (const m of matches) {
             const fields = extractMemoryFields(m);
-            console.log(`- [${m.id}] ${m.title} (score: ${m._score ? m._score.toFixed(3) : 'N/A'}, confidence: ${m.confidence || 'VERIFIED'})`);
-            if (fields.preconditions) console.log(`  Preconditions: ${fields.preconditions}`);
-            if (fields.provenRule) console.log(`  Proven Rule:   ${fields.provenRule}`);
-            if (m.tags?.length) console.log(`  Tags:          ${m.tags.join(', ')}`);
+            console.log(sanitizeGuidanceMarkers(`- [${m.id}] ${m.title} (score: ${m._score ? m._score.toFixed(3) : 'N/A'}, confidence: ${m.confidence || 'VERIFIED'})`));
+            if (fields.preconditions) console.log(sanitizeGuidanceMarkers(`  Preconditions: ${fields.preconditions}`));
+            if (fields.provenRule) console.log(sanitizeGuidanceMarkers(`  Proven Rule:   ${fields.provenRule}`));
+            if (m.tags?.length) console.log(sanitizeGuidanceMarkers(`  Tags:          ${m.tags.join(', ')}`));
             console.log('');
           }
         }
       }
+      console.log('\n' + renderCliGuidance({ step: 'context' }));
       break;
     }
 
@@ -153,11 +165,12 @@ async function main() {
       const tags = flags.tags ? String(flags.tags).split(',').map(s => s.trim()) : [];
       const topK = flags['top-k'] || flags.topK ? parseInt(flags['top-k'] || flags.topK, 10) : undefined;
       const matches = await bank.search({ query: q, tags, topK });
-      console.log(`\n=== Query Matches for "${q}" (${matches.length}) ===`);
+      console.log(sanitizeGuidanceMarkers(`\n=== Query Matches for "${q}" (${matches.length}) ===`));
       for (const m of matches) {
-        console.log(`\n--- [${m.id}] ${m.title} (score: ${m._score ? m._score.toFixed(3) : 'N/A'}, confidence: ${m.confidence || 'VERIFIED'}) ---`);
-        console.log(m.content);
+        console.log(sanitizeGuidanceMarkers(`\n--- [${m.id}] ${m.title} (score: ${m._score ? m._score.toFixed(3) : 'N/A'}, confidence: ${m.confidence || 'VERIFIED'}) ---`));
+        console.log(sanitizeGuidanceMarkers(m.content));
       }
+      console.log('\n' + renderCliGuidance({ step: 'query' }));
       break;
     }
 
@@ -165,10 +178,11 @@ async function main() {
       const target = flags.target;
       const probe = flags.probe;
       const memoryIds = flags['memory-ids'] || flags.memoryIds;
+      const sandbox = flags.sandbox || 'host';
 
       if (target && probe) {
-        const runtime = new VerifierRuntime();
-        const probeRes = await runtime.runProbe(probe, process.cwd());
+        const runtime = new VerifierRuntime({ sandbox });
+        const probeRes = await runtime.runProbe(probe, process.cwd(), { sandbox });
 
         let reportText;
         const isPass = probeRes.exitCode === 0 && !probeRes.blocked;
@@ -177,6 +191,7 @@ async function main() {
             'FINDINGS: Read-only probe executed successfully.',
             `COMMAND: ${probe}`,
             `EXIT_CODE: ${probeRes.exitCode}`,
+            `WORKSPACE_SNAPSHOT: ${probeRes.workspace_snapshot}`,
             probeRes.stdout ? `STDOUT:\n${probeRes.stdout}` : '',
             'DOUBTS: None',
             'VERDICT: PASS'
@@ -186,6 +201,7 @@ async function main() {
             'FINDINGS: Read-only probe failed or was blocked.',
             `COMMAND: ${probe}`,
             `EXIT_CODE: ${probeRes.exitCode}`,
+            `WORKSPACE_SNAPSHOT: ${probeRes.workspace_snapshot}`,
             probeRes.stderr ? `STDERR:\n${probeRes.stderr}` : '',
             'DOUBTS: Probe failure observed',
             'VERDICT: FAIL'
@@ -198,15 +214,20 @@ async function main() {
           verdict: parsed.verdict,
           report: reportText,
           target,
-          receiptId
+          receiptId,
+          workspaceSnapshot: probeRes.workspace_snapshot,
+          workspacePolluted: probeRes.workspace_polluted
         });
 
         await saveCachedReceipt(process.cwd(), {
           receipt,
           target,
+          probe,
           verdict: parsed.verdict,
           report: reportText,
-          receiptId
+          receiptId,
+          workspace_snapshot: probeRes.workspace_snapshot,
+          workspace_polluted: probeRes.workspace_polluted
         });
 
         if (memoryIds) {
@@ -214,36 +235,31 @@ async function main() {
         }
 
         console.log('=== Verifier Execution Output ===\n');
-        console.log(`Target:    ${target}`);
-        console.log(`Probe:     ${probe}`);
-        console.log(`Exit Code: ${probeRes.exitCode}`);
-        console.log(`Verdict:   ${parsed.verdict}`);
-        console.log(`Doubts:    ${parsed.doubts}`);
-        console.log(`Receipt:   ${receiptId}\n`);
-        console.log(receipt);
-        console.log('\n---RSI-GUIDANCE-BEGIN---');
-        console.log(`Receipt: ${receiptId} (${parsed.verdict})`);
-        if (parsed.isPass) {
-          console.log(`Next Action: Execute distill to persist verified lesson:`);
-          console.log(`  rsi distill --target "${target}" --title "<title>" --preconditions "<pre>" --rule "<rule>" --evidence "<ev>"`);
-        } else {
-          console.log(`Next Action: Execute practice to generate deliberate practice loop:`);
-          console.log(`  rsi practice --target "${target}" --failure "<reason>" --probe "${probe}"`);
+        console.log(sanitizeGuidanceMarkers(`Target:             ${target}`));
+        console.log(sanitizeGuidanceMarkers(`Probe:              ${probe}`));
+        console.log(`Exit Code:          ${probeRes.exitCode}`);
+        console.log(`Verdict:            ${parsed.verdict}`);
+        console.log(sanitizeGuidanceMarkers(`Doubts:             ${parsed.doubts}`));
+        console.log(`Workspace Snapshot: ${probeRes.workspace_snapshot}`);
+        if (probeRes.workspace_polluted) {
+          console.log(`Workspace Polluted: true`);
         }
-        console.log('---RSI-GUIDANCE-END---');
+        console.log(`Receipt:            ${receiptId}\n`);
+        console.log(sanitizeGuidanceMarkers(receipt));
+        console.log('\n' + renderCliGuidance({ step: 'verify', receiptId, verdict: parsed.verdict }));
         break;
       }
 
       const objective = positional.join(' ');
       if (!objective) {
-        console.error('Usage: rsi verify --target "<file>" --probe "<command>" [--memory-ids "<ids>"]');
+        console.error('Usage: rsi verify --target "<file>" --probe "<command>" [--memory-ids "<ids>"] [--sandbox host|docker]');
         console.error('   or: rsi verify "<task objective>"');
         process.exit(1);
       }
       const runtime = new VerifierRuntime();
       const prompt = runtime.buildVerifierPrompt(objective);
       console.log('=== Generated Double-Blind Verifier Prompt ===\n');
-      console.log(prompt);
+      console.log(sanitizeGuidanceMarkers(prompt));
       break;
     }
 
@@ -284,7 +300,9 @@ async function main() {
         process.exit(1);
       }
 
-      const content = [
+      const verifyCommand = flags['verify-command'] || flags.verifyCommand || flags.probe || receiptRecord.data.probe || '';
+
+      const contentParts = [
         '### Preconditions & Context',
         preconditions || 'N/A',
         '',
@@ -296,7 +314,11 @@ async function main() {
         '',
         '### Evidence',
         evidence || 'Verified through double-blind probe'
-      ].join('\n');
+      ];
+      if (verifyCommand) {
+        contentParts.push('', '### Re-check Command', `\`${verifyCommand}\``);
+      }
+      const content = contentParts.join('\n');
 
       const isPass = check.verdict === 'PASS';
       const newEntry = {
@@ -308,6 +330,8 @@ async function main() {
         confidence: isPass ? 'VERIFIED' : 'OBSERVED',
         status: 'ACTIVE',
         last_validated_at: new Date().toISOString(),
+        target,
+        verifyCommand,
         content: content.trim()
       };
 
@@ -317,7 +341,45 @@ async function main() {
 
       console.log(`✅ Distilled and committed memory entry [${newEntry.id}]`);
       console.log(`Path: ${res.committed.path}`);
+      if (res.synthesizedProbe) {
+        console.log(`Synthesized Probe: ${res.synthesizedProbe.probePath}`);
+      }
       console.log(`Receipt [${receiptRecord.receiptId}] consumed and archived.`);
+      console.log('\n' + renderCliGuidance({ step: 'distill', receiptId: receiptRecord.receiptId }));
+      break;
+    }
+
+    case 'regression': {
+      const sandbox = flags.sandbox || 'host';
+      const runtime = new VerifierRuntime({ sandbox });
+      const report = await runtime.runRegression(process.cwd(), { sandbox });
+
+      console.log('=== RSIAgent Regression Probe Suite ===\n');
+      console.log(`Total Probes:       ${report.total}`);
+      console.log(`Passed:             ${report.passed}`);
+      console.log(`Failed:             ${report.failed}`);
+      console.log(`Blocked (Policy):   ${report.blocked}`);
+      console.log(`Timed Out:          ${report.timedOut}`);
+      console.log(`Workspace Snapshot: ${report.workspace_snapshot}`);
+      console.log(`Workspace Polluted: ${report.workspace_polluted}\n`);
+
+      if (report.results.length === 0) {
+        console.log('No regression probes found in .rsi/probes/.');
+      } else {
+        for (const r of report.results) {
+          const badge = r.passed ? 'PASS' : (r.blocked ? 'BLOCKED' : (r.timedOut ? 'TIMEOUT' : 'FAIL'));
+          const exitCode = r.exitCode ?? r.actualExitCode;
+          console.log(sanitizeGuidanceMarkers(`- [${badge}] ${r.memoryId}: ${r.probeCommand || '(invalid)'} (exit=${exitCode}, ${r.durationMs ?? 0}ms)`));
+          if (!r.passed && r.stderr) {
+            console.log(sanitizeGuidanceMarkers(`  Reason: ${r.stderr.trim().split('\n')[0]}`));
+          }
+        }
+      }
+
+      console.log('\n' + renderCliGuidance({ step: 'regression' }));
+      if (!report.allPassed) {
+        process.exit(1);
+      }
       break;
     }
 
@@ -336,14 +398,15 @@ async function main() {
 
       if (target || failure || probe) {
         console.log('=== RSIAgent Phase 2 Deliberate Practice Plan ===\n');
-        console.log(`Target:  ${target || '(current workspace)'}`);
-        console.log(`Failure: ${failure || 'Unspecified failure'}`);
-        console.log(`Probe:   ${probe || 'N/A'}\n`);
+        console.log(sanitizeGuidanceMarkers(`Target:  ${target || '(current workspace)'}`));
+        console.log(sanitizeGuidanceMarkers(`Failure: ${failure || 'Unspecified failure'}`));
+        console.log(sanitizeGuidanceMarkers(`Probe:   ${probe || 'N/A'}\n`));
         console.log('Execution State Machine:');
         console.log('1. [Diagnostic Analysis]: Isolate root cause from error evidence without editing.');
         console.log('2. [Targeted Fix]: Apply minimal structural fix.');
-        console.log(`3. [Falsification Probe]: Run probe: "${probe || 'npm test'}"`);
-        console.log('4. [Distillation]: On PASS, run distill; on FAIL, iterate practice loop.\n');
+        console.log(sanitizeGuidanceMarkers(`3. [Falsification Probe]: Run probe: "${probe || 'npm test'}"`));
+        console.log('4. [Distillation]: On PASS, run distill; on FAIL, iterate practice loop.');
+        console.log('\n' + renderCliGuidance({ step: 'practice' }));
         break;
       }
 
@@ -394,7 +457,7 @@ async function main() {
 
     default: {
       console.log(`
-RSIAgent (DSH) — Recursive Self-Improvement CLI Tool (v0.3.0)
+RSIAgent (DSH) — Recursive Self-Improvement CLI Tool (v0.4.0)
 
 Usage:
   rsi status [--gc] [--migrate]          Show bank status, run receipt GC or schema migration
@@ -402,10 +465,11 @@ Usage:
   rsi trust <id>                         Sign and trust an unsigned workspace memory entry
   rsi context --task "<objective>"       Display Epistemic Core and dynamic Top-K memory recall
   rsi query "<text>" [--tags a,b]        Search memory bank using BM25F ranking
-  rsi verify --target "<file>" --probe "<cmd>" [--memory-ids "<ids>"]
+  rsi verify --target "<file>" --probe "<cmd>" [--memory-ids "<ids>"] [--sandbox host|docker]
                                          Execute safe probe and issue cached verification receipt
   rsi distill --target "<file>" --title "<title>" --rule "<rule>" --evidence "<ev>"
-                                         Distill causal lesson bound to cached verification receipt
+                                         Distill causal lesson and synthesize regression probe
+  rsi regression [--sandbox host|docker] Replay all synthesized regression probes in .rsi/probes/
   rsi explore [--goal "<objective>"]     Emit Phase 1 broad-exploration workflow request
   rsi practice [--target "<file>" --failure "<err>" --probe "<cmd>"]
                                          Emit Phase 2 deliberate practice workflow

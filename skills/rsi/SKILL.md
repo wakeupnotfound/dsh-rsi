@@ -2,9 +2,9 @@
 name: rsi
 slug: rsi
 displayName: "RSIAgent: 递归自我改进与独立双盲验证"
-version: 0.3.0
-summary: "无需微调的 Agent 递归改进引擎：遵循认识论 E1-E6 信道准则，以独立双盲盲审杜绝假阳性欺骗（False-Done），将试错经验沉淀为可演化持久记忆。v0.3.0 新增单 Skill 独立闭环与 BM25F 检索。"
-description: "无需微调的 Agent 递归改进引擎：遵循认识论 E1-E6 信道准则，以独立双盲盲审杜绝假阳性欺骗（False-Done），将试错经验沉淀为可演化持久记忆。v0.3.0 新增单文件 CLI 独立闭环与 BM25F 字段加权检索。"
+version: 0.4.0
+summary: "无需微调的 Agent 递归改进引擎：遵循认识论 E1-E6 信道准则，以独立双盲盲审杜绝假阳性欺骗（False-Done），将试错经验沉淀为可演化持久记忆。v0.4.0 新增回归探针合成、工作区污染守卫与双端守门。"
+description: "无需微调的 Agent 递归改进引擎：遵循认识论 E1-E6 信道准则，以独立双盲盲审杜绝假阳性欺骗（False-Done），将试错经验沉淀为可演化持久记忆。v0.4.0 新增回归探针自动合成、工作区快照守卫与双端自动化守门。"
 license: Apache-2.0
 homepage: "https://github.com/wakeupnotfound/dsh-rsi"
 tags: [self-improvement, verification, double-blind, epistemic-core, memory-distillation, debugging, code-audit]
@@ -23,7 +23,7 @@ allowed-tools:
 metadata:
   framework: RSIAgent
   paper: "arXiv:2609.15364"
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # RSIAgent 自进化执行协议
@@ -57,8 +57,9 @@ Task Ingestion
   1. **任务上下文与记忆召回**：`node "<SKILL_DIR>/scripts/rsi-cli.js" context --task "<当前任务简述>" --top-k 5`
   2. **仓库波次探索**：`node "<SKILL_DIR>/scripts/rsi-cli.js" explore --goal "<探索目标>"`
   3. **独立双盲验证**：`node "<SKILL_DIR>/scripts/rsi-cli.js" verify --target "<目标文件或模块>" --probe "<验证测试命令>"`
-  4. **因果记忆提炼**：`node "<SKILL_DIR>/scripts/rsi-cli.js" distill --target "<与 verify 相同的目标>" --title "<规则标题>" --preconditions "<触发前提>" --rule "<已验证规则>" --evidence "<实证依据>"`（自动读取最近一次验证回执，校验签名与目标任务绑定）
+  4. **因果记忆提炼**：`node "<SKILL_DIR>/scripts/rsi-cli.js" distill --target "<与 verify 相同的目标>" --title "<规则标题>" --preconditions "<触发前提>" --rule "<已验证规则>" --evidence "<实证依据>"`（自动读取最近一次验证回执，校验签名与目标任务绑定，并自动合成 `.rsi/probes/<id>.json` 回归探针）
   5. **失败刻意练习**：`node "<SKILL_DIR>/scripts/rsi-cli.js" practice --target "<目标>" --failure "<失败原因>" --probe "<验证命令>"`
+  6. **批量回归探针重放**：`node "<SKILL_DIR>/scripts/rsi-cli.js" regression`（强制白名单二次校验与 60s 超时重放所有历史回归探针）
 
 ## 2. 强制自进化闭环（Mandatory Epistemic Loop）
 1. **先查后改（Query Before Act）**：动手修改代码前，必须先执行 `query` 或 `context`，检查 `.rsi/memory/` 中是否已有相关模块的踩坑规则。

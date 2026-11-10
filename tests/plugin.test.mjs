@@ -281,8 +281,60 @@ test('rsi_verify issues cryptographic receipt and rsi_distill_memory enforces re
     verdict: 'PASS',
     verifier_report: auditReport,
     verification_receipt: verifyRes.verification_receipt,
+    verify_command: 'node -v',
+    target: 'src/index.js',
     rule_content: '---\nid: attested-rule\ntitle: "Attested rule"\ncategory: "workflow"\ntags: ["t"]\n---\nBody'
   }, {});
   assert.equal(verifiedRes.status, 'committed');
   assert.equal(verifiedRes.verified, true, 'With valid verification_receipt, lesson must be marked verified');
+  assert.ok(verifiedRes.synthesized_probe, 'Verified distill with verify_command must synthesize a regression probe');
+
+  // 3. Run regression via rsi_verify({ run_regression: true })
+  const regRes = await tools.get('rsi_verify').execute({
+    task_objective: 'Run regression suite',
+    run_regression: true
+  }, {});
+  assert.equal(regRes.status, 'ready_for_audit');
+  assert.ok(regRes.regression_report);
+  assert.equal(regRes.regression_report.allPassed, true);
+  assert.equal(regRes.regression_report.total, 1);
+  assert.equal(regRes.regression_report.passed, 1);
+});
+
+test('v0.4.0 SessionGatekeeper intercepts unverified session:finish and clears after PASS verification', async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-gatekeeper-'));
+  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+
+  const tools = new Map();
+  const events = new Map();
+  const mockCtx = {
+    systemPrompt: { section: () => () => {} },
+    tools: { register: (def) => { tools.set(def.name, def); return () => {}; } },
+    on: (evt, cb) => { events.set(evt, cb); return () => events.delete(evt); },
+    effect: (fn) => fn()
+  };
+
+  const handle = apply({ inject: (_d, cb) => cb(mockCtx) }, {
+    workspaceDir: tmpDir,
+    globalMemoryDir: path.join(tmpDir, 'global')
+  });
+
+  assert.ok(handle.gatekeeper, 'applyComponent must expose gatekeeper');
+  assert.ok(events.has('session:finish'), 'Plugin must register session:finish listener when ctx.on is available');
+
+  // 1. Mark session dirty (unverified modification)
+  handle.gatekeeper.markDirty('Edited src/core.js');
+  const finishBlocked = events.get('session:finish')({});
+  assert.equal(finishBlocked.allowed, false);
+  assert.equal(finishBlocked.block, true);
+  assert.match(finishBlocked.reminder, /GATEKEEPER WARNING/);
+
+  // 2. Run rsi_verify with PASS -> clears dirty state
+  await tools.get('rsi_verify').execute({
+    task_objective: 'Verify src/core.js',
+    report: 'DOUBTS: None\nVERDICT: PASS'
+  }, {});
+
+  const finishAllowed = events.get('session:finish')({});
+  assert.equal(finishAllowed.allowed, true);
 });

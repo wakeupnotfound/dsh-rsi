@@ -1,6 +1,6 @@
 {
   "name": "dsh-rsi",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "基于 RSIAgent 递归自我改进引擎：独立双盲验证、因果经验提炼与跨会话可演化记忆",
   "icon": "./icon.png",
   "type": "module",

@@ -44,7 +44,7 @@ test('RSI Skill definitions and reference files integrity', () => {
   // Check _meta.json
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
   assert.equal(meta.slug, 'rsi');
-  assert.equal(meta.version, '0.3.0');
+  assert.equal(meta.version, '0.4.0');
 });
 
 test('Standalone Single-Skill CLI E2E: context -> explore -> verify -> distill -> practice', async (t) => {
@@ -113,6 +113,16 @@ test('Standalone Single-Skill CLI E2E: context -> explore -> verify -> distill -
   const memFiles = await fsPromises.readdir(memDir);
   assert.ok(memFiles.some(f => f.includes('standalone-cli-node-verification-rule')));
 
+  // Check regression probe automatically synthesized in .rsi/probes/
+  const probesDir = path.join(tempDir, '.rsi', 'probes');
+  assert.ok(fs.existsSync(probesDir), 'distill must automatically create .rsi/probes/ directory');
+  const probeFiles = (await fsPromises.readdir(probesDir)).filter(f => f.endsWith('.json'));
+  assert.equal(probeFiles.length, 1);
+  assert.equal(probeFiles[0], 'standalone-cli-node-verification-rule.json');
+  const probeData = JSON.parse(await fsPromises.readFile(path.join(probesDir, probeFiles[0]), 'utf8'));
+  assert.equal(probeData.probeCommand, 'node -v');
+  assert.equal(probeData.target, targetFile);
+
   // Check receipt archived to .consumed/
   const consumedDir = path.join(tempDir, '.rsi', 'receipts', '.consumed');
   assert.ok(fs.existsSync(consumedDir));
@@ -125,6 +135,14 @@ test('Standalone Single-Skill CLI E2E: context -> explore -> verify -> distill -
   const practiceRes = runCli(['practice', '--target', targetFile, '--failure', 'Timeout in network test', '--probe', 'node -v']);
   assert.equal(practiceRes.status, 0, `practice command failed: ${practiceRes.stderr}`);
   assert.match(practiceRes.stdout, /Phase 2 Deliberate Practice Plan/);
+
+  // 6. Regression replay (in non-git tempDir -> workspace_snapshot: skipped_non_git)
+  const regRes = runCli(['regression']);
+  assert.equal(regRes.status, 0, `regression command failed: ${regRes.stderr}`);
+  assert.match(regRes.stdout, /Total Probes:\s*1/);
+  assert.match(regRes.stdout, /Passed:\s*1/);
+  assert.match(regRes.stdout, /Workspace Snapshot:\s*skipped_non_git/);
+  assert.match(regRes.stdout, /\[PASS\] standalone-cli-node-verification-rule: node -v \(exit=0, \d+ms\)/);
 });
 
 test('Security DoD: Stale receipt (target mismatch & expired >24h) and duplicate consumption rejected', async (t) => {
@@ -206,4 +224,53 @@ test('Security DoD: Stale receipt (target mismatch & expired >24h) and duplicate
     '--evidence', 'None'
   ]);
   assert.notEqual(dExpired.status, 0, 'Distill with expired receipt must fail');
+});
+
+test('Sandbox & EPIPE resilience: workspace-only write sandbox (read-only globalDir) and broken pipe (head -n 5)', async (t) => {
+  const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'dsh-rsi-sandbox-'));
+  const fakeHome = path.join(tempRoot, 'home');
+  const globalMemDir = path.join(fakeHome, '.dsh', 'storages', 'rsi', 'memory');
+  const workspaceDir = path.join(tempRoot, 'workspace');
+  await fsPromises.mkdir(globalMemDir, { recursive: true });
+  await fsPromises.mkdir(workspaceDir, { recursive: true });
+
+  // Pre-create .integrity-key so it is readable, then lock down globalMemDir to 0o500 (read+execute only, no write).
+  // This reproduces a workspace-write sandbox where globalDir already exists (mkdir recursive succeeds)
+  // but creating .rsi.lock inside globalDir fails with EACCES/EPERM.
+  const keyFile = path.join(fakeHome, '.dsh', 'storages', 'rsi', '.integrity-key');
+  await fsPromises.writeFile(keyFile, 'a'.repeat(64) + '\n', { mode: 0o600 });
+  await fsPromises.chmod(globalMemDir, 0o500);
+
+  t.after(async () => {
+    try { await fsPromises.chmod(globalMemDir, 0o700); } catch {}
+    try { await fsPromises.rm(tempRoot, { recursive: true, force: true }); } catch {}
+  });
+
+  const cliPath = path.join(rootDir, 'skills', 'rsi', 'scripts', 'rsi-cli.mjs');
+  const env = { ...process.env, HOME: fakeHome, USERPROFILE: fakeHome };
+  const runCli = (args) => spawnSync('node', [cliPath, ...args], { cwd: workspaceDir, env, encoding: 'utf-8' });
+
+  // 1. Verify + Distill in workspace-only sandbox must succeed without EPERM/EACCES on globalDir/.rsi.lock
+  const vRes = runCli(['verify', '--target', 'sandboxTarget.js', '--probe', 'node -v']);
+  assert.equal(vRes.status, 0, `verify failed in sandbox: ${vRes.stderr}`);
+
+  const dRes = runCli([
+    'distill',
+    '--target', 'sandboxTarget.js',
+    '--title', 'Sandbox Workspace Lock Rule',
+    '--preconditions', 'Global memory dir is read-only under workspace-write sandbox',
+    '--rule', 'Only lock and write to workspace memory scope',
+    '--evidence', 'Distill exited 0 under 0500 globalDir'
+  ]);
+  assert.equal(dRes.status, 0, `distill failed in sandbox: ${dRes.stderr}`);
+  assert.match(dRes.stdout, /✅ Distilled and committed/);
+
+  // 2. EPIPE test: pipe CLI output to head -n 5 and verify no unhandled EPIPE error
+  const pipeRes = spawnSync('/bin/sh', ['-c', `node "${cliPath}" context --task "sandbox" | head -n 5`], {
+    cwd: workspaceDir,
+    env,
+    encoding: 'utf-8'
+  });
+  assert.equal(pipeRes.status, 0);
+  assert.doesNotMatch(pipeRes.stderr, /EPIPE/);
 });
