@@ -54,11 +54,11 @@ Task Ingestion
 在完成 §0 预检后，检查当前环境可用工具：
 - **模式 A（原生 Tool 模式）**：若环境中已注册 `rsi_verify`、`rsi_distill_memory`、`rsi_query_memory`、`rsi_explore`、`rsi_practice`（无论来自 DSH 插件还是 MCP Server），请直接调用对应原生工具。
 - **模式 B（Standalone 单 Skill CLI 模式）**：若环境中无上述原生工具，必须通过 Bash/终端运行本技能目录内置的自包含脚本（`<SKILL_DIR>` 按 §0.2 确定）：
-  1. **任务上下文与记忆召回**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" context --task "<当前任务简述>" --top-k 5`
-  2. **仓库波次探索**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" explore --goal "<探索目标>"`
-  3. **独立双盲验证**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" verify --target "<目标文件或模块>" --probe "<验证测试命令>"`
-  4. **因果记忆提炼**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" distill --target "<与 verify 相同的目标>" --title "<规则标题>" --preconditions "<触发前提>" --rule "<已验证规则>" --evidence "<实证依据>"`（自动读取最近一次验证回执，校验签名与目标任务绑定）
-  5. **失败刻意练习**：`node "<SKILL_DIR>/scripts/rsi-cli.mjs" practice --target "<目标>" --failure "<失败原因>" --probe "<验证命令>"`
+  1. **任务上下文与记忆召回**：`node "<SKILL_DIR>/scripts/rsi-cli.js" context --task "<当前任务简述>" --top-k 5`
+  2. **仓库波次探索**：`node "<SKILL_DIR>/scripts/rsi-cli.js" explore --goal "<探索目标>"`
+  3. **独立双盲验证**：`node "<SKILL_DIR>/scripts/rsi-cli.js" verify --target "<目标文件或模块>" --probe "<验证测试命令>"`
+  4. **因果记忆提炼**：`node "<SKILL_DIR>/scripts/rsi-cli.js" distill --target "<与 verify 相同的目标>" --title "<规则标题>" --preconditions "<触发前提>" --rule "<已验证规则>" --evidence "<实证依据>"`（自动读取最近一次验证回执，校验签名与目标任务绑定）
+  5. **失败刻意练习**：`node "<SKILL_DIR>/scripts/rsi-cli.js" practice --target "<目标>" --failure "<失败原因>" --probe "<验证命令>"`
 
 ## 2. 强制自进化闭环（Mandatory Epistemic Loop）
 1. **先查后改（Query Before Act）**：动手修改代码前，必须先执行 `query` 或 `context`，检查 `.rsi/memory/` 中是否已有相关模块的踩坑规则。
