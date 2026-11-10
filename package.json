@@ -45,6 +45,7 @@
   },
   "scripts": {
     "build:skill": "npx esbuild bin/rsi.mjs --bundle --platform=node --target=node20 --format=esm --outfile=skills/rsi/scripts/rsi-cli.mjs",
+    "pack:skill": "npm run build:skill && python3 scripts/pack-skill.py",
     "test": "npm run build:skill && node --test tests/*.test.mjs",
     "status": "node bin/rsi.mjs status"
   },

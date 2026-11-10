@@ -1,6 +1,13 @@
 ---
 name: rsi
-description: Recursive Self-Improvement (RSIAgent) — 提供双盲独立验证、防伪因果记忆提炼与失败驱动练习闭环。在执行非平凡代码修改、Bug 修复、架构探索或测试验证时激活。
+slug: rsi
+displayName: "RSIAgent: 递归自我改进与独立双盲验证"
+version: 0.3.0
+summary: "无需微调的 Agent 自我改进技能。遵循认识论六大真理信道（E1-E6），通过零历史独立双盲验证杜绝 False-Done，提炼结构化因果规则并持续演化。"
+description: "Recursive Self-Improvement (RSIAgent) — 提供双盲独立验证、防伪因果记忆提炼与失败驱动练习闭环。在执行非平凡代码修改、Bug 修复、架构探索或测试验证时激活。"
+license: Apache-2.0
+homepage: "https://github.com/wakeupnotfound/dsh-rsi"
+tags: [self-improvement, verification, double-blind, epistemic-core, memory-distillation, debugging, code-audit]
 allowed-tools:
   - rsi_query_memory
   - rsi_verify
